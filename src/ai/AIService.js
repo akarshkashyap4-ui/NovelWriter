@@ -98,7 +98,7 @@ export class AIService {
     /**
      * Send a message to the AI with streaming
      * @param {Array} messages - Chat messages
-     * @param {Function} onChunk - Callback for each chunk of text
+     * @param {Function} onChunk - Callback for each chunk: (contentChunk, fullContent, thinkingChunk, fullThinking)
      * @param {Object} options - Additional options
      */
     async sendMessageStream(messages, onChunk, options = {}) {
@@ -135,6 +135,7 @@ export class AIService {
             const reader = response.body.getReader();
             const decoder = new TextDecoder();
             let fullContent = '';
+            let fullThinking = '';
 
             while (true) {
                 const { done, value } = await reader.read();
@@ -150,10 +151,23 @@ export class AIService {
 
                         try {
                             const parsed = JSON.parse(data);
-                            const content = parsed.choices?.[0]?.delta?.content || '';
+                            const delta = parsed.choices?.[0]?.delta || {};
+
+                            // Regular content
+                            const content = delta.content || '';
                             if (content) {
                                 fullContent += content;
-                                onChunk(content, fullContent);
+                            }
+
+                            // Thinking/reasoning content (different APIs use different field names)
+                            const thinking = delta.reasoning_content || delta.thinking || delta.reasoning || '';
+                            if (thinking) {
+                                fullThinking += thinking;
+                            }
+
+                            // Call with both content and thinking
+                            if (content || thinking) {
+                                onChunk(content, fullContent, thinking, fullThinking);
                             }
                         } catch (e) {
                             // Skip malformed JSON
@@ -162,7 +176,7 @@ export class AIService {
                 }
             }
 
-            return fullContent;
+            return { content: fullContent, thinking: fullThinking };
         } finally {
             this.isStreaming = false;
             this.abortController = null;
@@ -186,7 +200,26 @@ export class AIService {
     buildSystemPrompt(mode, context = {}) {
         const baseContext = `You are an AI writing assistant for a novel called "${context.title || 'Untitled'}" by ${context.author || 'Unknown Author'}.
 
-You have access to the manuscript's structure, characters, plot notes, and the current scene the user is working on.`;
+You have access to the manuscript's structure, characters, plot notes, and the current scene the user is working on.
+
+## IMPORTANT: Editing Instructions
+When you write or rewrite text that should be applied to the manuscript:
+1. **Always wrap the edited text in a code block** using triple backticks
+2. For small fixes (grammar, typos), use diff format showing - old and + new lines
+3. For rewrites or new content, just put the new text in a plain code block
+
+Example for fixes:
+\`\`\`diff
+- She walked slow through the forest.
++ She walked slowly through the forest.
+\`\`\`
+
+Example for rewrites:
+\`\`\`
+The forest loomed before her, ancient oaks stretching their gnarled fingers toward a slate-gray sky. Each step forward felt heavier than the last.
+\`\`\`
+
+This allows the user to click "Apply Changes" to edit their manuscript directly.`;
 
         // Mode-specific detailed instructions
         const modeInstructions = {

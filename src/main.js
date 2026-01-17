@@ -222,43 +222,15 @@ class NovelWriterApp {
       this.agentPanel.togglePanel();
     }
 
-    let prompt = '';
-    const context = `Context: \n"${text}"\n\n`;
-
-    switch (action) {
-      case 'rewrite':
-        prompt = `${context}Please rewrite the selected text to improve flow and clarity while maintaining the original meaning.`;
-        break;
-      case 'expand':
-        prompt = `${context}Please expand upon the selected text, adding more sensory details and depth.`;
-        break;
-      case 'shorten':
-        prompt = `${context}Please shorten the selected text to be more concise.`;
-        break;
-      case 'fix':
-        prompt = `${context}Please fix any grammar, spelling, or punctuation errors in the selected text.`;
-        break;
-      case 'ask':
-        // Just populate input
-        this.agentPanel.inputField.value = `${context}I have a question about this text: `;
-        this.agentPanel.inputField.focus();
-        return;
+    // 'ask' is the only action that shows user input
+    if (action === 'ask') {
+      this.agentPanel.inputField.value = `I have a question about this text:\n"${text}"\n\nMy question: `;
+      this.agentPanel.inputField.focus();
+      return;
     }
 
-    if (prompt) {
-      this.agentPanel.inputField.value = prompt;
-      // Auto-send for quick actions? User might want to edit.
-      // Let's auto-send for immediate results as requested by "Quick Actions"
-      // But maybe safer to let user hit enter?
-      // User said: "Clicking on the ask button... it goes 'I can see the lines...'"
-      // For others, "Make sure AI is given whole context...".
-      // I'll auto-send for actions, but let user edit for 'ask'.
-
-      // Actually, user might want to add "Make it scarier" to 'rewrite'.
-      // Let's populate and focus for ALL, but maybe add a visually distinct "Press Enter" hint?
-      // Or better: Auto-send for Fix/Rewrite/Expand/Shorten to feel "Agentic".
-      this.agentPanel.sendMessage();
-    }
+    // All other actions use the silent request (no visible prompt)
+    this.agentPanel.sendSilentRequest(action, text);
   }
 
   openProjectsModal() {

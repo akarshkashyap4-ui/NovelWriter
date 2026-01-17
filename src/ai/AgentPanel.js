@@ -249,13 +249,15 @@ export class AgentPanel {
 
             // Send to AI with streaming
             let fullResponse = '';
+            let fullThinking = '';
             let aiDeclaredMode = null;
             let modeAnnounced = false;
 
             await this.app.aiService.sendMessageStream(
                 messages,
-                (chunk, accumulated) => {
+                (chunk, accumulated, thinkingChunk, accumulatedThinking) => {
                     fullResponse = accumulated;
+                    fullThinking = accumulatedThinking || '';
 
                     // Parse and announce AI's declared mode (only once, from first chunk)
                     if (!modeAnnounced && selectedMode === 'auto') {
@@ -274,16 +276,16 @@ export class AgentPanel {
                         }
                     }
 
-                    // Update message (optionally strip the mode prefix from display)
+                    // Update message with content and thinking
                     const displayContent = accumulated.replace(/^\[MODE:\s*(quick|planning|chatty)\]\s*/i, '');
-                    this.updateMessage(typingId, displayContent);
+                    this.updateMessage(typingId, displayContent, fullThinking);
                 }
             );
 
             // Store in history (keep full response including mode prefix for context)
             this.history.push(
                 { role: 'user', content: cleanInput },
-                { role: 'assistant', content: fullResponse }
+                { role: 'assistant', content: fullResponse, thinking: fullThinking }
             );
 
             // Save conversation to storage
@@ -303,9 +305,124 @@ export class AgentPanel {
     }
 
     /**
-     * Add a message to the history UI
+     * Send a silent request to the AI (for quick actions)
+     * Does NOT show the user's prompt in chat, only shows AI response
+     * Includes FULL manuscript context for story-aware suggestions
+     * @param {string} action - The action type (rewrite, expand, etc.)
+     * @param {string} selectedText - The text the user selected
+     * @param {string} instruction - Additional instruction for the AI
      */
-    addMessage(role, content, isTyping = false) {
+    async sendSilentRequest(action, selectedText, instruction = '') {
+        if (this.isProcessing) return;
+
+        // Check API configuration
+        if (!this.app.aiService.isConfigured()) {
+            this.addMessage('system', '⚠️ API not configured. Click the plug icon to add your API key.');
+            return;
+        }
+
+        // Auto-create conversation if none exists
+        if (!this.currentConversationId) {
+            this.createNewConversation();
+        }
+
+        // Get current location in manuscript
+        const sceneContext = this.contextManager.getCurrentSceneContext();
+        const locationInfo = sceneContext
+            ? `**Current Location:** ${sceneContext.partTitle} > ${sceneContext.chapterTitle} > ${sceneContext.sceneTitle}`
+            : 'Working on manuscript';
+
+        // Build action-specific prompts (no code blocks - just natural suggestions)
+        const actionPrompts = {
+            rewrite: `The user has selected the following text and wants you to rewrite it to improve flow, clarity, and prose quality while maintaining the original meaning and fitting the story's tone.`,
+            expand: `The user has selected the following text and wants you to expand it with more sensory details, emotions, and depth while staying true to the story.`,
+            shorten: `The user has selected the following text and wants you to make it more concise while keeping the essential meaning and narrative flow.`,
+            fix: `The user has selected the following text and wants you to fix any grammar, spelling, or punctuation errors. Only fix errors - don't change the style or meaning.`
+        };
+
+        const actionInstruction = actionPrompts[action] || instruction;
+
+        // Build the full prompt with location and selected text
+        const fullPrompt = `${locationInfo}
+
+${actionInstruction}
+
+**Selected Text:**
+"${selectedText}"
+
+Please provide your suggestion. Keep it natural and fitting to the story.`;
+
+        // Show a subtle processing indicator (NOT the user message)
+        const actionLabels = {
+            rewrite: '✏️ Rewriting...',
+            expand: '📝 Expanding...',
+            shorten: '✂️ Shortening...',
+            fix: '🔧 Fixing...'
+        };
+        this.addMessage('mode', actionLabels[action] || '⚡ Processing...');
+
+        // Show typing indicator
+        this.isProcessing = true;
+        this.updateStatus('thinking');
+        const typingId = this.addMessage('agent', '', true);
+
+        try {
+            // Build FULL context - include everything for story awareness
+            const fullContext = this.contextManager.buildContext({
+                includeStructure: true,      // Full manuscript structure
+                includeCurrentScene: true,   // Current scene content
+                includeCharacters: true,     // Character profiles
+                includePlot: true            // Plot notes
+            });
+
+            // Build system prompt with full context
+            const systemPrompt = this.app.aiService.buildSystemPrompt('quick', {
+                title: this.app.state.metadata.title,
+                author: this.app.state.metadata.author
+            }) + '\n\n--- MANUSCRIPT CONTEXT ---\n\n' + fullContext;
+
+            // Prepare messages
+            const messages = [
+                { role: 'system', content: systemPrompt },
+                { role: 'user', content: fullPrompt }
+            ];
+
+            // Stream response
+            let fullResponse = '';
+            let fullThinking = '';
+            await this.app.aiService.sendMessageStream(
+                messages,
+                (chunk, accumulated, thinkingChunk, accumulatedThinking) => {
+                    fullResponse = accumulated;
+                    fullThinking = accumulatedThinking || '';
+                    // Strip mode prefix if present
+                    const displayContent = accumulated.replace(/^\[MODE:\s*(quick|planning|chatty)\]\s*/i, '');
+                    this.updateMessage(typingId, displayContent, fullThinking);
+                }
+            );
+
+            // Save to history
+            this.history.push(
+                { role: 'user', content: `[Quick Action: ${action}] on "${selectedText.substring(0, 50)}..."` },
+                { role: 'assistant', content: fullResponse }
+            );
+            this.saveConversation();
+
+            this.updateStatus('ready', 'quick');
+
+        } catch (error) {
+            this.updateMessage(typingId, `❌ Error: ${error.message}`);
+            this.updateStatus('error');
+        } finally {
+            this.isProcessing = false;
+        }
+    }
+
+    /**
+     * Add a message to the history UI
+     * @param {string} thinking - Optional thinking/reasoning content for agent messages
+     */
+    addMessage(role, content, isTyping = false, thinking = '') {
         if (!this.historyContainer) return null;
 
         const messageId = `msg-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`;
@@ -319,6 +436,18 @@ export class AgentPanel {
             messageEl.className = `agent-message ${role}`;
             messageEl.id = messageId;
             messageEl.dataset.content = content; // Store original content for editing
+            if (thinking) {
+                messageEl.dataset.thinking = thinking;
+            }
+
+            // Build thinking section HTML if present (for agent/assistant messages)
+            const isAgentMessage = (role === 'agent' || role === 'assistant');
+            const thinkingHtml = (isAgentMessage && thinking) ? `
+                <details class="message-thinking">
+                    <summary>💭 Show Thinking</summary>
+                    <div class="thinking-content">${this.formatContent(thinking)}</div>
+                </details>
+            ` : '';
 
             if (isTyping) {
                 messageEl.classList.add('typing');
@@ -337,9 +466,10 @@ export class AgentPanel {
                 // Add click handler for undo
                 const undoBtn = messageEl.querySelector('.message-undo-btn');
                 undoBtn.addEventListener('click', () => this.rollbackToMessage(messageId, content));
-            } else if (role === 'agent') {
-                // Agent messages get a retry button (will be shown only on latest)
+            } else if (isAgentMessage) {
+                // Agent/assistant messages get thinking + content + retry button
                 messageEl.innerHTML = `
+                    ${thinkingHtml}
                     <div class="message-content">${this.formatContent(content)}</div>
                     <button class="message-retry-btn" title="Regenerate response">
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -383,15 +513,27 @@ export class AgentPanel {
     /**
      * Update an existing message (removes typing indicator)
      */
-    updateMessage(messageId, content) {
+    updateMessage(messageId, content, thinking = '') {
         const messageEl = document.getElementById(messageId);
         if (messageEl) {
             messageEl.classList.remove('typing');
             messageEl.dataset.content = content; // Store for potential retry
+            if (thinking) {
+                messageEl.dataset.thinking = thinking;
+            }
+
+            // Build thinking section HTML if present
+            const thinkingHtml = thinking ? `
+                <details class="message-thinking">
+                    <summary>💭 Show Thinking</summary>
+                    <div class="thinking-content">${this.formatContent(thinking)}</div>
+                </details>
+            ` : '';
 
             // Check if this is an agent message - add retry button
             if (messageEl.classList.contains('agent')) {
                 messageEl.innerHTML = `
+                    ${thinkingHtml}
                     <div class="message-content">${this.formatContent(content)}</div>
                     <button class="message-retry-btn" title="Regenerate response">
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -597,9 +739,25 @@ export class AgentPanel {
             .replace(/</g, '&lt;')
             .replace(/>/g, '&gt;');
 
+        // Handle diff code blocks specially - apply styling ONLY inside ```diff blocks
+        formatted = formatted.replace(/```diff\n([\s\S]*?)```/g, (match, diffContent) => {
+            const styledDiff = diffContent
+                .split('\n')
+                .map(line => {
+                    if (line.startsWith('- ')) {
+                        return `<span class="diff-remove">${line}</span>`;
+                    } else if (line.startsWith('+ ')) {
+                        return `<span class="diff-add">${line}</span>`;
+                    }
+                    return line;
+                })
+                .join('\n');
+            return `<pre><code class="diff">${styledDiff}</code></pre>`;
+        });
+
         // Basic markdown
         formatted = formatted
-            // Code blocks
+            // Other code blocks
             .replace(/```(\w*)\n([\s\S]*?)```/g, '<pre><code>$2</code></pre>')
             // Inline code
             .replace(/`([^`]+)`/g, '<code>$1</code>')
@@ -607,9 +765,6 @@ export class AgentPanel {
             .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
             // Italic
             .replace(/\*([^*]+)\*/g, '<em>$1</em>')
-            // Diff lines
-            .replace(/^- (.+)$/gm, '<span class="diff-remove">- $1</span>')
-            .replace(/^\+ (.+)$/gm, '<span class="diff-add">+ $1</span>')
             // Line breaks
             .replace(/\n/g, '<br>');
 
@@ -695,7 +850,7 @@ export class AgentPanel {
         // Render messages in UI
         this.clearHistoryUI();
         for (const msg of conversation.messages) {
-            this.addMessage(msg.role, msg.content, false);
+            this.addMessage(msg.role, msg.content, false, msg.thinking || '');
         }
 
         this.populateConversationSelect();
@@ -723,19 +878,24 @@ export class AgentPanel {
             state.conversations.push(conversation);
         }
 
-        // Get messages from the UI
+        // Get messages from the UI (skip system messages like welcome)
         const messages = [];
         if (this.historyContainer) {
             const messageEls = this.historyContainer.querySelectorAll('.agent-message');
             for (const el of messageEls) {
+                // Skip system messages (welcome message) and mode announcements
+                if (el.classList.contains('system') || el.classList.contains('mode-announcement')) {
+                    continue;
+                }
+
                 let role = 'system';
                 if (el.classList.contains('user')) role = 'user';
                 else if (el.classList.contains('agent')) role = 'assistant';
-                else if (el.classList.contains('mode-announcement')) role = 'mode';
 
-                const content = el.querySelector('.message-content')?.textContent || '';
+                const content = el.dataset.content || el.querySelector('.message-content')?.textContent || '';
+                const thinking = el.dataset.thinking || '';
                 if (content && !el.classList.contains('typing')) {
-                    messages.push({ role, content, timestamp: new Date().toISOString() });
+                    messages.push({ role, content, thinking, timestamp: new Date().toISOString() });
                 }
             }
         }

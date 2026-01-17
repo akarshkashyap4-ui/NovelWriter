@@ -610,6 +610,56 @@ body {
   content: none;
 }
 
+/* Thinking/Reasoning Section */
+.message-thinking {
+  margin-bottom: 8px;
+  background: var(--bg-tertiary);
+  border-radius: var(--radius-sm);
+  border-left: 3px solid var(--accent-secondary);
+  overflow: hidden;
+}
+
+.message-thinking summary {
+  padding: 8px 12px;
+  cursor: pointer;
+  font-size: 12px;
+  color: var(--text-muted);
+  user-select: none;
+  list-style: none;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.message-thinking summary::-webkit-details-marker {
+  display: none;
+}
+
+.message-thinking summary::before {
+  content: '▶';
+  font-size: 10px;
+  transition: transform 0.2s ease;
+}
+
+.message-thinking[open] summary::before {
+  transform: rotate(90deg);
+}
+
+.message-thinking[open] summary {
+  border-bottom: 1px solid var(--border-color);
+}
+
+.thinking-content {
+  padding: 12px;
+  font-size: 13px;
+  color: var(--text-secondary);
+  line-height: 1.5;
+  max-height: 300px;
+  overflow-y: auto;
+  white-space: pre-wrap;
+  font-family: var(--font-mono);
+}
+
 @keyframes typing {
 
   0%,

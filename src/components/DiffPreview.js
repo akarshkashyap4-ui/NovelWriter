@@ -97,15 +97,33 @@ export class DiffPreview {
 
     /**
      * Show the diff preview modal
-     * @param {string} diffContent - The raw diff text
+     * @param {string} diffContent - The raw diff text or replacement text
      * @param {Object} context - Metadata about where to apply changes
      */
     show(diffContent, context = {}) {
         this.currentDiff = diffContent;
         this.currentContext = context;
 
-        // Render the diff
-        const changes = this.parseDiff(diffContent);
+        let changes;
+        if (context.type === 'replacement') {
+            // Full replacement mode
+            // Get current editor content to show what will be removed
+            const editor = document.getElementById('editor-content');
+            const currentText = editor ? editor.innerText : '';
+
+            changes = [
+                { type: 'header', content: '@@ Full Rewrite / Replacement @@' },
+                { type: 'remove', lines: currentText.split('\n') },
+                { type: 'add', lines: diffContent.split('\n') }
+            ];
+
+            this.currentSource = 'replacement';
+        } else {
+            // Standard Diff mode
+            changes = this.parseDiff(diffContent);
+            this.currentSource = 'diff';
+        }
+
         this.renderDiff(changes);
 
         // Show modal
@@ -160,39 +178,41 @@ export class DiffPreview {
 
         // Verify we're applying to the correct content type (usually scene)
         if (!this.app.currentContext || this.app.currentContext.type !== 'scene') {
-            alert('Cannot apply changes: No active scene.');
-            return;
+            // Allow applying to notes or other contexts too if possible
+            // But warn if no context
+            console.warn('Applying changes with no explicit context tracked.');
         }
 
         // 1. Save current state for Undo
         // TODO: Implement proper Undo Stack in App or Editor
 
         // 2. Parse diff and apply to content
-        const currentContent = editor.innerText; // Use text for robust matching? Or innerHTML? 
-        // Diff usually works on lines. HTML structure complicates this.
-        // Strategy: Convert visual lines to text, apply diff, render back?
-        // Risky for formatting.
-
-        // Alternative: If diff is "replacement" (common in AI), just replace text.
-        // Ideally AI returns a REPLACE block or we treat the diff as a patch.
-
         // For Phase 1, we will implement a simple "Fuzzy Patch" or "Block Replace"
         // If it's a diff, we try to locate the "-" lines and replace with "+" lines.
 
         try {
-            const success = this.applyPatchToEditor(editor, this.currentDiff);
-            if (success) {
-                // Trigger save
-                this.app.saveCurrentContent();
-                // Notify user
-                const status = document.getElementById('save-status');
-                if (status) {
-                    status.textContent = 'Changes Applied';
-                    setTimeout(() => status.textContent = 'Saved', 2000);
-                }
-                this.hide();
+            if (this.currentSource === 'replacement') {
+                // Simple overwrite
+                // Preserve basic paragraphs if possible, or just set text
+                // formatting might assume markdown -> HTML conversion needed?
+                // For now, simple text replacement.
+                // We'll split by newline and wrap in <p> if it looks like paragraphs
+                const paragraphs = this.currentDiff.split(/\n\n+/);
+                const html = paragraphs.map(p => {
+                    if (!p.trim()) return '';
+                    return `<p>${this.escapeHtml(p).replace(/\n/g, '<br>')}</p>`;
+                }).join('');
+
+                editor.innerHTML = html;
+                this.finalizeApply();
             } else {
-                alert('Could not auto-apply changes. The text might have changed since the suggestion was made.');
+                // Diff Patching
+                const success = this.applyPatchToEditor(editor, this.currentDiff);
+                if (success) {
+                    this.finalizeApply();
+                } else {
+                    alert('Could not auto-apply diff. The text might have changed since the suggestion was made.');
+                }
             }
         } catch (e) {
             console.error('Failed to apply diff:', e);
@@ -200,56 +220,101 @@ export class DiffPreview {
         }
     }
 
+    finalizeApply() {
+        this.app.saveCurrentContent();
+        // Notify user
+        const status = document.getElementById('save-status');
+        if (status) {
+            const original = status.textContent;
+            status.textContent = 'Changes Applied';
+            status.style.color = 'var(--accent-primary)';
+            setTimeout(() => {
+                status.textContent = original;
+                status.style.color = '';
+            }, 2000);
+        }
+        this.hide();
+    }
+
     applyPatchToEditor(editor, diffText) {
-        // Naive implementation: 
-        // 1. Get plain text of editor
-        // 2. Apply textual patch
-        // 3. Update editor innerText (loses formatting!)
-        // BETTER: We need to preserve formatting.
-        // OR: We accept that AI rewrites lose generic HTML formatting unless AI outputs HTML.
-        // Compromise: We replace the innerHTML if the AI provides a full rewrite.
-        // If it's a partial diff, we try to match text nodes.
+        // Simple "Find and Replace" Patching Strategy
+        // 1. Parse diff to find "Modify" blocks (Remove followed by Add)
+        // 2. Ignore pure context for matching if possible, but use extended context if needed?
+        //    Simpler: Just look for the "Removed" block in the editor text.
 
-        console.log('Applying patch...');
-        // For now, let's assume the AI is rewriting paragraphs.
-
-        const rawContent = editor.innerHTML;
-        // This is complex. Let's start with a simpler "Replace Selection" or "Append" logic first
-        // If we have selected text context, we replace that.
-
-        // ... Logic to be refined as we test ...
-        // Placeholder simple replacement for "rewrite" tasks
-
-        // Parse the changes again
         const changes = this.parseDiff(diffText);
+        let editorText = editor.innerText;
+        let originalText = editorText;
+        let success = false;
 
-        // If it looks like a full file replacement (no context blocks at start/end matching significant content)
-        // just replace all.
+        // We'll process changes in chunks.
+        // Identify contiguous Remove/Add blocks.
 
-        // Let's implement a 'Find and Replace' strategy for chunks.
-        let newContent = rawContent;
+        let i = 0;
+        while (i < changes.length) {
+            const block = changes[i];
 
-        changes.forEach(block => {
+            // Check for strict "Modify" pattern: Remove -> Add
             if (block.type === 'remove') {
-                // Try to remove these lines
-                // This is hard on HTML.
+                const searchStr = block.lines.join('\n');
+                let replaceStr = '';
+
+                // Look ahead for Add
+                if (i + 1 < changes.length && changes[i + 1].type === 'add') {
+                    replaceStr = changes[i + 1].lines.join('\n');
+                    i++; // Skip next
+                } else {
+                    // Just a deletion
+                    replaceStr = '';
+                }
+
+                // Perform replacement
+                // Simple string replace (first occurrence? uniqueness check?)
+                if (editorText.includes(searchStr)) {
+                    // Verify uniqueness to be safe?
+                    if (editorText.indexOf(searchStr) !== editorText.lastIndexOf(searchStr)) {
+                        console.warn('Ambiguous patch: defined text found multiple times.');
+                        // proceed with first? or fail?
+                        // Fail for safety
+                        return false;
+                    }
+
+                    editorText = editorText.replace(searchStr, replaceStr);
+                    success = true;
+                } else {
+                    console.warn('Patch failed: Could not find original text block:', searchStr);
+                    return false;
+                }
+            } else if (block.type === 'add') {
+                // Pure addition (not following remove)
+                // This usually requires Context to know WHERE to add.
+                // Naive: We can't handle pure additions safely without context matching.
+                // But often AI gives "Context - Add - Context".
+                // We'd need to look at previous context block.
+
+                // If previous block was context, append to that context?
+                // This starts getting complex for a "Basic" patcher.
+                // Let's assume most AI edits are Rewrites (Remove+Add).
+                console.warn('Pure addition not supported in basic patcher yet.');
             }
-        });
+            i++;
+        }
 
-        // Temporary strategy for Phase 1 MVP:
-        // Use text-based replacement.
-        // 1. Normalize editor text
-        // 2. Apply patch
-        // 3. Set text back (will strip bold/italic for now, but safer)
-        // User can re-add formatting. 
-        // Long term: Markdown-based editor or careful HTML patching.
+        if (success) {
+            // Apply text back to editor (preserves paragraphs if we wrap carefully?)
+            // Editor is contentEditable. innerText assignment usually strips tags.
+            // We should try to preserve basic structure.
+            // For now, mapping newlines into <p> or <br> is best effort.
+            const paragraphs = editorText.split(/\n\n+/);
+            const html = paragraphs.map(p => {
+                if (!p.trim()) return '';
+                // Simple escaping
+                return `<p>${this.escapeHtml(p).replace(/\n/g, '<br>')}</p>`;
+            }).join('');
 
-        const textLines = editor.innerText.split('\n');
-        // ... patching logic ...
+            editor.innerHTML = html;
+        }
 
-        // Fallback for MVP: 
-        // Just alert "Patching not fully implemented yet"
-
-        return false; // Stub
+        return success;
     }
 }
