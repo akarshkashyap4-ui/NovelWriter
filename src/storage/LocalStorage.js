@@ -162,6 +162,8 @@ export class Storage {
       notes: migrated.notes || defaults.notes,
       settings: { ...defaults.settings, ...migrated.settings },
       currentView: migrated.currentView || defaults.currentView,
+      // Part Summaries
+      summaries: { ...defaults.summaries, ...migrated.summaries },
       // AI Conversations
       conversations: migrated.conversations || defaults.conversations,
       activeConversationId: migrated.activeConversationId || defaults.activeConversationId
@@ -229,6 +231,10 @@ export class Storage {
       currentView: {
         section: 'manuscript',
         itemId: null
+      },
+      // Part Summaries (for token-efficient context)
+      summaries: {
+        parts: {} // { partId: { content: "...", wordCount: 123, generatedAt: "...", targetWords: 500 } }
       },
       // AI Agent Conversations (per-project)
       conversations: [],

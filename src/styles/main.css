@@ -2665,3 +2665,116 @@ body {
   color: var(--accent-primary);
   transform: scale(1.1);
 }
+
+/* ========================================
+   Summary View Styles
+   ======================================== */
+
+.summary-view {
+  max-width: 800px;
+  margin: 0 auto;
+  padding: var(--space-lg);
+}
+
+.summary-title {
+  font-size: 1.75rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: var(--space-sm);
+}
+
+.summary-meta {
+  font-size: 0.875rem;
+  color: var(--text-muted);
+  margin-bottom: var(--space-lg);
+  padding-bottom: var(--space-md);
+  border-bottom: 1px solid var(--border-light);
+}
+
+.summary-content {
+  font-family: var(--font-editor);
+  font-size: 1rem;
+  line-height: 1.8;
+  color: var(--text-primary);
+  min-height: 200px;
+  padding: var(--space-md);
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-md);
+}
+
+.summary-content:focus {
+  outline: none;
+  border-color: var(--accent-primary);
+  box-shadow: 0 0 0 3px var(--accent-light);
+}
+
+/* Summary Generation Loading State */
+.summary-generating {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 300px;
+  text-align: center;
+  color: var(--text-secondary);
+}
+
+.summary-generating h2 {
+  font-size: 1.5rem;
+  margin-bottom: var(--space-sm);
+}
+
+.summary-generating p {
+  font-size: 0.875rem;
+  color: var(--text-muted);
+  margin-bottom: var(--space-lg);
+}
+
+.loading-spinner {
+  width: 40px;
+  height: 40px;
+  border: 3px solid var(--border-light);
+  border-top-color: var(--accent-primary);
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* ========================================
+   Collapsible Tree Items
+   ======================================== */
+
+.tree-collapse-toggle {
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+  cursor: pointer;
+  color: var(--text-muted);
+  transition: transform 0.15s ease;
+  margin-right: 2px;
+}
+
+.tree-collapse-toggle:hover {
+  color: var(--accent-primary);
+}
+
+/* Rotate arrow when expanded */
+.tree-item-collapsible:not(.collapsed) .tree-collapse-toggle {
+  transform: rotate(90deg);
+}
+
+/* Hide children when collapsed */
+.tree-children.collapsed {
+  display: none;
+}
+
+/* Ensure tree-children container displays properly */
+.tree-children {
+  display: block;
+}

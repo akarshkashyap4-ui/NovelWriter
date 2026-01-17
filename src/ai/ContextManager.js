@@ -45,27 +45,127 @@ export class ContextManager {
     }
 
     /**
-     * Get current scene content with surrounding context
+     * Get the active writing context with content
+     * Returns content for the current scene, chapter, part, or full book
      */
-    getCurrentSceneContext() {
+    getActiveContentContext() {
         const ctx = this.app.currentContext;
-        if (!ctx || ctx.type !== 'scene') return null;
+        if (!ctx) return null;
 
-        const part = this.app.state.manuscript.parts.find(p => p.id === ctx.partId);
-        const chapter = part?.chapters.find(c => c.id === ctx.chapterId);
-        const scene = chapter?.scenes.find(s => s.id === ctx.sceneId);
+        // Determine the current part ID based on context type
+        let currentPartId = null;
+        let focusInfo = null;  // What specific item is the user focused on
 
-        if (!scene) return null;
+        if (ctx.type === 'scene') {
+            currentPartId = ctx.partId;
+            const part = this.app.state.manuscript.parts.find(p => p.id === ctx.partId);
+            const chapter = part?.chapters.find(c => c.id === ctx.chapterId);
+            const scene = chapter?.scenes.find(s => s.id === ctx.sceneId);
+            focusInfo = { type: 'scene', title: scene?.title, chapterTitle: chapter?.title };
+        } else if (ctx.type === 'chapter') {
+            currentPartId = ctx.partId;
+            const part = this.app.state.manuscript.parts.find(p => p.id === ctx.partId);
+            const chapter = part?.chapters.find(c => c.id === ctx.chapterId);
+            focusInfo = { type: 'chapter', title: chapter?.title };
+        } else if (ctx.type === 'part') {
+            currentPartId = ctx.partId;
+            focusInfo = { type: 'part' };
+        } else if (ctx.type === 'book') {
+            // For book context, use special handling
+            return this.getFullBookContext();
+        }
 
-        const content = scene.content?.replace(/<[^>]*>/g, '') || '';
+        if (!currentPartId) return null;
+
+        // Get the full part content
+        const part = this.app.state.manuscript.parts.find(p => p.id === currentPartId);
+        if (!part) return null;
+
+        let content = '';
+        part.chapters?.forEach(chapter => {
+            content += `# ${chapter.displayTitle || chapter.title}\n\n`;
+            chapter.scenes?.forEach(s => {
+                content += `## ${s.title}\n`;
+                content += (s.content?.replace(/<[^>]*>/g, '') || '') + '\n\n';
+            });
+        });
 
         return {
-            partTitle: part.displayTitle || part.title,
-            chapterTitle: chapter.displayTitle || chapter.title,
-            sceneTitle: scene.title,
+            type: 'part',
+            partId: currentPartId,
+            title: part.displayTitle || part.title,
+            focusInfo: focusInfo,
             content: content,
             wordCount: content.trim().split(/\s+/).filter(w => w).length
         };
+    }
+
+    /**
+     * Get full book context (for when book title is selected)
+     */
+    getFullBookContext() {
+        let content = '';
+        const parts = this.app.state.manuscript.parts || [];
+
+        parts.forEach(part => {
+            content += `# ${part.displayTitle || part.title}\n\n`;
+            part.chapters?.forEach(chapter => {
+                content += `## ${chapter.displayTitle || chapter.title}\n\n`;
+                chapter.scenes?.forEach(s => {
+                    content += `### ${s.title}\n`;
+                    content += (s.content?.replace(/<[^>]*>/g, '') || '') + '\n\n';
+                });
+            });
+        });
+
+        const wordCount = content.trim().split(/\s+/).filter(w => w).length;
+
+        // If the manuscript is too large, provide a truncated version
+        const MAX_WORDS = 5000;
+        if (wordCount > MAX_WORDS) {
+            const words = content.split(/\s+/);
+            content = words.slice(0, MAX_WORDS).join(' ') + '\n\n[... content truncated for context limits ...]';
+        }
+
+        return {
+            type: 'book',
+            title: this.app.state.metadata.title,
+            content: content,
+            wordCount: wordCount,
+            truncated: wordCount > MAX_WORDS
+        };
+    }
+
+    /**
+     * Get summaries of all parts EXCEPT the current one
+     * Returns summaries of parts before and after the current part
+     */
+    getOtherPartSummaries(currentPartId) {
+        const parts = this.app.state.manuscript.parts || [];
+        const summaries = this.app.state.summaries?.parts || {};
+
+        let beforeSummaries = '';
+        let afterSummaries = '';
+        let foundCurrent = false;
+
+        for (const part of parts) {
+            if (part.id === currentPartId) {
+                foundCurrent = true;
+                continue;
+            }
+
+            const summary = summaries[part.id];
+            if (summary) {
+                const summaryText = `### Summary: ${part.displayTitle || part.title}\n${summary.content}\n\n`;
+                if (foundCurrent) {
+                    afterSummaries += summaryText;
+                } else {
+                    beforeSummaries += summaryText;
+                }
+            }
+        }
+
+        return { beforeSummaries, afterSummaries };
     }
 
     /**
@@ -90,14 +190,29 @@ export class ContextManager {
      * Get character profiles
      */
     getCharacterProfiles() {
-        const casts = this.app.state.characters?.casts || [];
+        const characters = this.app.state.characters || [];
+
+        if (characters.length === 0) {
+            return `# Character Profiles\n\nNo characters defined yet.\n\n`;
+        }
+
         let profiles = `# Character Profiles\n\n`;
 
-        casts.forEach(cast => {
-            profiles += `## ${cast.name}\n`;
-            cast.characters?.forEach(char => {
+        // Group characters by role (cast)
+        const casts = {};
+        characters.forEach(char => {
+            const role = char.role || 'Other';
+            if (!casts[role]) casts[role] = [];
+            casts[role].push(char);
+        });
+
+        // Build output grouped by cast
+        Object.entries(casts).forEach(([castName, chars]) => {
+            profiles += `## ${castName}\n\n`;
+            chars.forEach(char => {
                 profiles += `### ${char.name}\n`;
-                profiles += char.description || 'No description yet.\n';
+                if (char.description) profiles += `${char.description}\n`;
+                if (char.notes) profiles += `Notes: ${char.notes}\n`;
                 profiles += '\n';
             });
         });
@@ -106,20 +221,55 @@ export class ContextManager {
     }
 
     /**
-     * Get plot notes
+     * Get plot data (plot lines and grids)
      */
     getPlotNotes() {
-        const plotItems = this.app.state.plot?.items || [];
-        let notes = `# Plot Notes\n\n`;
+        const plotLines = this.app.state.plot?.plotLines || [];
+        const gridData = this.app.state.plot?.gridData || {};
 
-        plotItems.forEach(item => {
-            if (item.type === 'plot-line') {
-                notes += `## Plot Line: ${item.title}\n`;
-                notes += (item.content || 'No content yet.') + '\n\n';
-            }
-        });
+        let output = `# Plot Data\n\n`;
 
-        return notes;
+        // Plot Lines
+        if (plotLines.length > 0) {
+            output += `## Plot Lines\n\n`;
+            plotLines.forEach(line => {
+                output += `### ${line.title || 'Untitled Plot Line'}\n`;
+                output += (line.content?.replace(/<[^>]*>/g, '') || 'No content yet.') + '\n';
+                if (line.points && line.points.length > 0) {
+                    output += `**Key Points:**\n`;
+                    line.points.forEach((point, i) => {
+                        output += `${i + 1}. ${point}\n`;
+                    });
+                }
+                output += '\n';
+            });
+        }
+
+        // Plot Grids
+        const gridKeys = Object.keys(gridData);
+        if (gridKeys.length > 0) {
+            output += `## Plot Grids\n\n`;
+            gridKeys.forEach(gridId => {
+                const grid = gridData[gridId];
+                if (grid && typeof grid === 'object') {
+                    output += `### Grid: ${gridId}\n`;
+                    // Grid data is typically scene -> plotline -> content mapping
+                    Object.entries(grid).forEach(([sceneId, plotPoints]) => {
+                        if (plotPoints && Object.keys(plotPoints).length > 0) {
+                            output += `Scene ${sceneId}: `;
+                            output += Object.values(plotPoints).filter(p => p).join(', ') + '\n';
+                        }
+                    });
+                    output += '\n';
+                }
+            });
+        }
+
+        if (plotLines.length === 0 && gridKeys.length === 0) {
+            output += 'No plot data defined yet.\n';
+        }
+
+        return output;
     }
 
     /**
@@ -158,13 +308,37 @@ export class ContextManager {
         }
 
         if (includeCurrentScene) {
-            const scene = this.getCurrentSceneContext();
-            if (scene) {
-                context += `# Current Location\n`;
-                context += `Part: ${scene.partTitle}\n`;
-                context += `Chapter: ${scene.chapterTitle}\n`;
-                context += `Scene: ${scene.sceneTitle}\n\n`;
-                context += `## Scene Content:\n${scene.content}\n\n---\n\n`;
+            const active = this.getActiveContentContext();
+            if (active) {
+                // Add summaries of parts BEFORE the current part
+                if (active.partId) {
+                    const { beforeSummaries, afterSummaries } = this.getOtherPartSummaries(active.partId);
+
+                    if (beforeSummaries) {
+                        context += `# Story So Far (Previous Parts)\n${beforeSummaries}\n---\n\n`;
+                    }
+                }
+
+                // Add current part info with focus details
+                context += `# Current Part: ${active.title}`;
+                if (active.focusInfo && active.focusInfo.type !== 'part') {
+                    context += ` (focused on ${active.focusInfo.type}: ${active.focusInfo.title})`;
+                }
+                context += `\n\n`;
+                context += `## Full Part Content (${active.wordCount} words):\n${active.content}\n\n---\n\n`;
+
+                // Add summaries of parts AFTER the current part
+                if (active.partId) {
+                    const { afterSummaries } = this.getOtherPartSummaries(active.partId);
+                    if (afterSummaries) {
+                        context += `# Future Parts (Summaries)\n${afterSummaries}\n---\n\n`;
+                    }
+                }
+            } else if (active && active.type === 'book') {
+                // Book-level context (no summaries needed, full manuscript)
+                context += `# Full Manuscript: ${active.title}\n`;
+                if (active.truncated) context += `> Note: Manuscript truncated to ~5000 words for context limits.\n\n`;
+                context += `## Content (${active.wordCount} words):\n${active.content}\n\n---\n\n`;
             }
         }
 

@@ -14,7 +14,34 @@ export class TreeNav {
         this.contextMenu = getContextMenu();
         this.draggedItem = null;
 
+        // Initialize collapsed items from state (persisted)
+        this.initCollapseState();
+
         this.bindEvents();
+    }
+
+    initCollapseState() {
+        // Ensure state has collapsedItems array
+        if (!this.app.state.ui) this.app.state.ui = {};
+        if (!this.app.state.ui.collapsedItems) this.app.state.ui.collapsedItems = [];
+
+        // Use a Set for quick lookup
+        this.collapsedItems = new Set(this.app.state.ui.collapsedItems);
+    }
+
+    isCollapsed(id) {
+        return this.collapsedItems.has(id);
+    }
+
+    toggleCollapse(id) {
+        if (this.collapsedItems.has(id)) {
+            this.collapsedItems.delete(id);
+        } else {
+            this.collapsedItems.add(id);
+        }
+        // Persist to state
+        this.app.state.ui.collapsedItems = Array.from(this.collapsedItems);
+        this.app.save();
     }
 
     bindEvents() {
@@ -26,6 +53,7 @@ export class TreeNav {
 
         this.container.innerHTML = `
       ${this.renderSection('MANUSCRIPT', 'manuscript', this.renderManuscript())}
+      ${this.renderSection('SUMMARIES', 'summaries', this.renderSummaries())}
       ${this.renderSection('PLOT', 'plot', this.renderPlot(), true)}
       ${this.renderSection('CHARACTERS', 'characters', this.renderCharacters(), true)}
       ${this.renderSection('STORY NOTES', 'notes', this.renderNotes(), true)}
@@ -57,7 +85,8 @@ export class TreeNav {
         // Tree items
         this.container.querySelectorAll('.tree-item').forEach(item => {
             item.addEventListener('click', (e) => {
-                if (!e.target.closest('.tree-item-menu-btn')) {
+                // Don't select if clicking menu button or collapse toggle
+                if (!e.target.closest('.tree-item-menu-btn') && !e.target.closest('.tree-collapse-toggle')) {
                     this.selectItem(item);
                 }
             });
@@ -68,6 +97,36 @@ export class TreeNav {
                     e.stopPropagation();
                     const rect = menuBtn.getBoundingClientRect();
                     this.showItemMenu(item, rect.right, rect.bottom);
+                });
+            }
+
+            // Collapse toggle handler
+            const collapseToggle = item.querySelector('.tree-collapse-toggle');
+            if (collapseToggle) {
+                collapseToggle.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    const targetId = collapseToggle.dataset.toggle;
+                    const itemType = item.dataset.type;
+                    const isCollapsing = !this.isCollapsed(targetId);
+
+                    // Toggle in state (persists)
+                    this.toggleCollapse(targetId);
+
+                    // When collapsing a Part, also collapse all its chapters
+                    // This ensures re-expanding shows only chapters (scenes hidden)
+                    if (isCollapsing && itemType === 'part') {
+                        const part = this.app.state.manuscript.parts.find(p => p.id === targetId);
+                        if (part) {
+                            part.chapters.forEach(chapter => {
+                                if (!this.isCollapsed(chapter.id)) {
+                                    this.toggleCollapse(chapter.id);
+                                }
+                            });
+                        }
+                    }
+
+                    // Re-render to apply all changes correctly
+                    this.render();
                 });
             }
 
@@ -180,15 +239,27 @@ export class TreeNav {
         let html = this.renderItem({ section: 'manuscript', id: 'book-title', type: 'book', label: bookTitle, icon: 'book' });
 
         state.manuscript.parts.forEach(part => {
-            html += this.renderItem({ section: 'manuscript', id: part.id, type: 'part', label: part.title, icon: 'part', depth: 1, draggable: true });
+            const partCollapsed = this.isCollapsed(part.id);
+            html += this.renderItem({ section: 'manuscript', id: part.id, type: 'part', label: part.title, icon: 'part', depth: 1, draggable: true, collapsible: true, isCollapsed: partCollapsed });
+
+            // Collapsible container for chapters (collapsed if part is collapsed)
+            html += `<div class="tree-children${partCollapsed ? ' collapsed' : ''}" data-parent="${part.id}">`;
 
             part.chapters.forEach(chapter => {
-                html += this.renderItem({ section: 'manuscript', id: chapter.id, type: 'chapter', label: chapter.title, icon: 'file', depth: 2, parent: part.id, draggable: true });
+                const chapterCollapsed = this.isCollapsed(chapter.id);
+                html += this.renderItem({ section: 'manuscript', id: chapter.id, type: 'chapter', label: chapter.title, icon: 'file', depth: 2, parent: part.id, draggable: true, collapsible: true, isCollapsed: chapterCollapsed });
+
+                // Collapsible container for scenes (collapsed if chapter is collapsed)
+                html += `<div class="tree-children${chapterCollapsed ? ' collapsed' : ''}" data-parent="${chapter.id}">`;
 
                 chapter.scenes.forEach(scene => {
                     html += this.renderItem({ section: 'manuscript', id: scene.id, type: 'scene', label: scene.title, icon: 'doc', depth: 3, parent: chapter.id, grandparent: part.id, draggable: true });
                 });
+
+                html += `</div>`;
             });
+
+            html += `</div>`;
         });
 
         return html;
@@ -238,7 +309,35 @@ export class TreeNav {
         ).join('');
     }
 
-    renderItem({ section, id, type, label, icon, depth = 0, parent = null, grandparent = null, draggable = false }) {
+    renderSummaries() {
+        const summaries = this.app.state.summaries?.parts || {};
+        const parts = this.app.state.manuscript.parts || [];
+
+        // Get summaries that exist, in part order
+        const summaryItems = parts
+            .filter(part => summaries[part.id])
+            .map(part => ({
+                partId: part.id,
+                partTitle: part.displayTitle || part.title,
+                wordCount: summaries[part.id].wordCount || 0
+            }));
+
+        if (summaryItems.length === 0) {
+            return '<div class="tree-item-empty">No summaries yet. Right-click a Part to generate.</div>';
+        }
+
+        return summaryItems.map(item =>
+            this.renderItem({
+                section: 'summaries',
+                id: `summary-${item.partId}`,
+                type: 'summary',
+                label: `${item.partTitle} Summary`,
+                icon: 'summary'
+            })
+        ).join('');
+    }
+
+    renderItem({ section, id, type, label, icon, depth = 0, parent = null, grandparent = null, draggable = false, collapsible = false, isCollapsed = false }) {
         const icons = {
             book: '<path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/>',
             part: '<path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1 0-5H20"/><path d="M12 6v7"/><path d="M8 9h8"/>',
@@ -247,19 +346,29 @@ export class TreeNav {
             grid: '<rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="3" y1="15" x2="21" y2="15"/><line x1="9" y1="3" x2="9" y2="21"/><line x1="15" y1="3" x2="15" y2="21"/>',
             list: '<line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><circle cx="4" cy="6" r="2" fill="currentColor"/><circle cx="4" cy="12" r="2" fill="currentColor"/><circle cx="4" cy="18" r="2" fill="currentColor"/>',
             users: '<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>',
-            user: '<path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>'
+            user: '<path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>',
+            summary: '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14,2 14,8 20,8"/><line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="17" x2="12" y2="17"/>'
         };
 
         const paddingLeft = 12 + (depth * 16);
         const parentAttr = parent ? `data-parent="${parent}"` : '';
         const grandparentAttr = grandparent ? `data-grandparent="${grandparent}"` : '';
+        const collapsedClass = isCollapsed ? ' collapsed' : '';
+
+        // Collapse toggle arrow for collapsible items
+        const collapseToggle = collapsible ? `
+            <svg class="tree-collapse-toggle" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" data-toggle="${id}">
+                <path d="M9 18l6-6-6-6"/>
+            </svg>
+        ` : '';
 
         return `
-      <div class="tree-item ${type === 'book' ? 'tree-item-book' : ''}" 
+      <div class="tree-item ${type === 'book' ? 'tree-item-book' : ''} ${collapsible ? 'tree-item-collapsible' : ''}${collapsedClass}" 
            data-section="${section}" data-id="${id}" data-type="${type}" 
            ${parentAttr} ${grandparentAttr}
            style="padding-left: ${paddingLeft}px;"
            ${draggable ? 'draggable="true"' : ''}>
+        ${collapseToggle}
         <svg class="tree-item-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           ${icons[icon] || icons.doc}
         </svg>
@@ -309,8 +418,11 @@ export class TreeNav {
                 ];
                 break;
             case 'part':
+                const hasSummary = this.app.state.summaries?.parts?.[id];
                 items = [
                     { label: 'Add Chapter', onClick: () => this.addChapter(id) },
+                    { divider: true },
+                    { label: hasSummary ? '🔄 Regenerate Summary' : '📝 Generate Summary', onClick: () => this.generatePartSummary(id) },
                     { divider: true },
                     { label: 'Rename', onClick: () => this.rename('part', id) },
                     { label: 'Delete', onClick: () => this.deletePart(id) }
@@ -400,6 +512,7 @@ export class TreeNav {
             case 'cast': this.loadCast(id); break;
             case 'character': this.loadCharacter(id); break;
             case 'note': this.loadNote(id); break;
+            case 'summary': this.loadSummary(id); break;
         }
     }
 
@@ -954,5 +1067,160 @@ export class TreeNav {
             const text = item.textContent.toLowerCase();
             item.style.display = text.includes(lowerQuery) || !query ? '' : 'none';
         });
+    }
+
+    // ========== SUMMARIES ==========
+
+    /**
+     * Load a summary for viewing/editing
+     */
+    loadSummary(summaryId) {
+        const partId = summaryId.replace('summary-', '');
+        const part = this.app.state.manuscript.parts.find(p => p.id === partId);
+        const summary = this.app.state.summaries?.parts?.[partId];
+
+        if (!part || !summary) return;
+
+        this.app.currentContext = { type: 'summary', partId };
+
+        const editor = document.getElementById('editor-content');
+        editor.innerHTML = `
+            <div class="summary-view">
+                <h1 class="summary-title">${part.displayTitle || part.title} Summary</h1>
+                <p class="summary-meta">Generated: ${new Date(summary.generatedAt).toLocaleDateString()} | ${summary.wordCount} words</p>
+                <div class="summary-content" contenteditable="true" id="summary-editor">${summary.content}</div>
+            </div>
+        `;
+
+        // Save on blur
+        const summaryEditor = document.getElementById('summary-editor');
+        summaryEditor.addEventListener('blur', () => {
+            const newContent = summaryEditor.innerText;
+            this.app.state.summaries.parts[partId].content = newContent;
+            this.app.state.summaries.parts[partId].wordCount = newContent.trim().split(/\s+/).filter(w => w).length;
+            this.app.save();
+        });
+    }
+
+    /**
+     * Generate or regenerate a part summary
+     */
+    async generatePartSummary(partId) {
+        const state = this.app.state;
+        const parts = state.manuscript.parts || [];
+        const partIndex = parts.findIndex(p => p.id === partId);
+
+        if (partIndex === -1) return;
+
+        // Ensure summaries object exists
+        if (!state.summaries) state.summaries = { parts: {} };
+        if (!state.summaries.parts) state.summaries.parts = {};
+
+        // Enforce ordered summarization: all previous parts must have summaries
+        for (let i = 0; i < partIndex; i++) {
+            const prevPart = parts[i];
+            if (!state.summaries.parts[prevPart.id]) {
+                alert(`Please summarize "${prevPart.displayTitle || prevPart.title}" first.\n\nSummaries must be generated in order.`);
+                return;
+            }
+        }
+
+        // Prompt for target word count
+        const targetWords = prompt('Target word count for summary:', '500');
+        if (!targetWords) return;
+        const targetWordCount = parseInt(targetWords) || 500;
+
+        // Build context: previous summaries + full current part content
+        const part = parts[partIndex];
+        let context = '';
+
+        // Add previous part summaries
+        for (let i = 0; i < partIndex; i++) {
+            const prevPart = parts[i];
+            const prevSummary = state.summaries.parts[prevPart.id];
+            if (prevSummary) {
+                context += `## Summary of ${prevPart.displayTitle || prevPart.title}\n`;
+                context += prevSummary.content + '\n\n---\n\n';
+            }
+        }
+
+        // Add full content of current part
+        context += `## Full Content of ${part.displayTitle || part.title} (TO BE SUMMARIZED)\n\n`;
+        part.chapters?.forEach(chapter => {
+            context += `### ${chapter.displayTitle || chapter.title}\n\n`;
+            chapter.scenes?.forEach(scene => {
+                context += `#### ${scene.title}\n`;
+                context += (scene.content?.replace(/<[^>]*>/g, '') || '') + '\n\n';
+            });
+        });
+
+        // Build messages for LLM
+        const systemPrompt = `You are a skilled editor creating a narrative summary of ONE SPECIFIC PART of a novel.
+
+IMPORTANT: You will be given:
+1. Summaries of PREVIOUS parts (for context only - DO NOT re-summarize these)
+2. The FULL CONTENT of the part you need to summarize
+
+Your task is to summarize ONLY the part labeled "TO BE SUMMARIZED". The previous summaries are just background context so you understand the story up to this point.
+
+Your summary should:
+- Cover ONLY the events in the part being summarized
+- Capture key plot points, character developments, and important events
+- Be written in present tense, narrative style  
+- Stay within approximately ${targetWordCount} words
+- NOT include meta-commentary or formatting, just the summary text
+- NOT repeat or summarize the previous parts again`;
+
+        const userPrompt = `Please write a ${targetWordCount}-word summary of ONLY "${part.displayTitle || part.title}".
+
+${context}
+
+Remember: Summarize ONLY the content under "TO BE SUMMARIZED". The previous summaries are just context.
+
+Write a clear, narrative summary of the story events in this specific part:`;
+
+        // Show loading state
+        const editor = document.getElementById('editor-content');
+        const originalContent = editor.innerHTML;
+        editor.innerHTML = `
+            <div class="summary-generating">
+                <h2>✨ Generating Summary...</h2>
+                <p>Summarizing "${part.displayTitle || part.title}" (target: ~${targetWordCount} words)</p>
+                <div class="loading-spinner"></div>
+            </div>
+        `;
+
+        try {
+            // Send to AI
+            let fullResponse = '';
+            await this.app.aiService.sendMessageStream(
+                [
+                    { role: 'system', content: systemPrompt },
+                    { role: 'user', content: userPrompt }
+                ],
+                (chunk, accumulated) => {
+                    fullResponse = accumulated;
+                }
+            );
+
+            // Save the summary
+            state.summaries.parts[partId] = {
+                content: fullResponse.trim(),
+                wordCount: fullResponse.trim().split(/\s+/).filter(w => w).length,
+                generatedAt: new Date().toISOString(),
+                targetWords: targetWordCount
+            };
+
+            this.app.save();
+            this.render();
+
+            // Load the summary view
+            this.loadSummary(`summary-${partId}`);
+
+        } catch (error) {
+            console.error('Summary generation failed:', error);
+            editor.innerHTML = originalContent;
+            alert('Failed to generate summary: ' + error.message);
+        }
     }
 }

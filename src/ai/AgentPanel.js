@@ -215,13 +215,25 @@ export class AgentPanel {
         const typingId = this.addMessage('agent', '', true);
 
         try {
-            // Build context
+            // Detect context macros in user input
+            const includeCharactersMacro = /\{characters?\}/i.test(cleanInput);
+            const includePlotMacro = /\{plot\}/i.test(cleanInput);
+            const includeNotesMacro = /\{notes?\}/i.test(cleanInput);
+
+            // Remove macros from the message displayed to AI
+            const cleanedInput = cleanInput
+                .replace(/\{characters?\}/gi, '')
+                .replace(/\{plot\}/gi, '')
+                .replace(/\{notes?\}/gi, '')
+                .trim();
+
+            // Build context (characters always included; plot and notes only with macros)
             const context = this.contextManager.buildContext({
                 includeStructure: true,
                 includeCurrentScene: true,
                 includeCharacters: true,
-                includePlot: true,
-                includeNotes: cleanInput.toLowerCase().includes('note')
+                includePlot: includePlotMacro,
+                includeNotes: includeNotesMacro
             });
 
             // Get manuscript summary for system prompt
@@ -236,11 +248,11 @@ export class AgentPanel {
             // Build messages
             const messages = [
                 { role: 'system', content: systemPrompt },
-                { role: 'user', content: `[MANUSCRIPT CONTEXT]\n${context}\n\n[USER REQUEST]\n${cleanInput}` }
+                { role: 'user', content: `[MANUSCRIPT CONTEXT]\n${context}\n\n[USER REQUEST]\n${cleanedInput}` }
             ];
 
-            // Add conversation history (last 5 exchanges)
-            const recentHistory = this.history.slice(-10);
+            // Add conversation history (last 40 exchanges = 80 messages)
+            const recentHistory = this.history.slice(-80);
             for (const msg of recentHistory) {
                 if (msg.role === 'user' || msg.role === 'assistant') {
                     messages.splice(-1, 0, { role: msg.role, content: msg.content });
@@ -433,7 +445,10 @@ Please provide your suggestion. Keep it natural and fitting to the story.`;
             messageEl.className = 'agent-message mode-announcement';
             messageEl.innerHTML = `<div class="message-content">${content}</div>`;
         } else {
-            messageEl.className = `agent-message ${role}`;
+            // Normalize 'assistant' to 'agent' for consistent CSS styling
+            // (Messages are saved as 'assistant' per OpenAI format, but styled as 'agent')
+            const cssRole = (role === 'assistant') ? 'agent' : role;
+            messageEl.className = `agent-message ${cssRole}`;
             messageEl.id = messageId;
             messageEl.dataset.content = content; // Store original content for editing
             if (thinking) {
