@@ -1289,17 +1289,17 @@ INSTRUCTIONS:
 1. Return the ORIGINAL text with suggestions inserted
 2. Use format: [S1: note], [S2: note], etc.
 3. Number by importance: S1 = most impactful
+4. In your suggestions, mark key words with **asterisks** for emphasis
 
 TWO TYPES OF SUGGESTIONS:
 - INLINE: Insert after the specific sentence it applies to
 - GENERAL: Put at the very end after "---" for overall pacing, structure, or theme feedback
 
 EXAMPLE OUTPUT:
-John walked home. [S1: Describe his emotional state.] The night was dark. [S2: Add sensory details.]
+John walked home. [S1: Describe his **emotional state** or **physical weariness**.] The night was dark. [S2: Add **sensory details** - sounds, smells.]
 
 ---
-[S3: Consider adding internal monologue to increase reader connection.]
-[S4: The pacing feels rushed - add a beat of reflection before the next paragraph.]
+[S3: Consider adding **internal monologue** to increase reader connection.]
 
 Your task: ${prompts[suggestionType]}`;
 

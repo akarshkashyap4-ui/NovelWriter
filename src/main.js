@@ -668,7 +668,11 @@ class NovelWriterApp {
       // Convert [S1: text] blocks to styled interactive elements
       let styledText = annotatedText.replace(
         /\[S(\d+):\s*([^\]]+)\]/g,
-        '<span class="suggestion-inline" data-id="s$1" data-number="$1" title="Right-click for options">[S$1: $2]</span>'
+        (match, num, text) => {
+          // Convert **keyword** to highlighted spans
+          let highlightedText = text.replace(/\*\*([^*]+)\*\*/g, '<span class="suggestion-keyword">$1</span>');
+          return `<span class="suggestion-inline" data-id="s${num}" data-number="${num}" title="Right-click for options"><span class="suggestion-label">S${num}</span>: ${highlightedText}</span>`;
+        }
       );
 
       // Wrap in a container

@@ -2947,3 +2947,17 @@ body {
   background: rgba(34, 197, 94, 0.25);
   border-bottom-style: solid;
 }
+
+.suggestion-label {
+  background: #16a34a;
+  color: white;
+  padding: 1px 5px;
+  border-radius: 3px;
+  font-weight: 600;
+  font-size: 12px;
+  margin-right: 4px;
+}
+
+.suggestion-keyword {
+  color: #d4a84b;
+}
