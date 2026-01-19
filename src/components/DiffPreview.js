@@ -169,6 +169,28 @@ export class DiffPreview {
     }
 
     /**
+     * Parse markdown to HTML (basic support for bold, italic, etc.)
+     * This prevents AI formatting from being stripped
+     */
+    parseMarkdown(text) {
+        if (!text) return '';
+        let html = this.escapeHtml(text);
+
+        // Bold (**text** or __text__)
+        html = html.replace(/(\*\*|__)(.*?)\1/g, '<strong>$2</strong>');
+
+        // Italic (*text* or _text_)
+        html = html.replace(/(\*|_)(.*?)\1/g, '<em>$2</em>');
+
+        // Headers
+        html = html.replace(/^### (.*$)/gm, '<h3>$1</h3>');
+        html = html.replace(/^## (.*$)/gm, '<h2>$1</h2>');
+        html = html.replace(/^# (.*$)/gm, '<h1>$1</h1>');
+
+        return html;
+    }
+
+    /**
      * Apply the changes to the actual editor/manuscript
      */
     applyChanges() {
@@ -200,7 +222,8 @@ export class DiffPreview {
                 const paragraphs = this.currentDiff.split(/\n\n+/);
                 const html = paragraphs.map(p => {
                     if (!p.trim()) return '';
-                    return `<p>${this.escapeHtml(p).replace(/\n/g, '<br>')}</p>`;
+                    // Use markdown parser instead of simple escape
+                    return `<p>${this.parseMarkdown(p).replace(/\n/g, '<br>')}</p>`;
                 }).join('');
 
                 editor.innerHTML = html;
@@ -237,84 +260,128 @@ export class DiffPreview {
     }
 
     applyPatchToEditor(editor, diffText) {
-        // Simple "Find and Replace" Patching Strategy
-        // 1. Parse diff to find "Modify" blocks (Remove followed by Add)
-        // 2. Ignore pure context for matching if possible, but use extended context if needed?
-        //    Simpler: Just look for the "Removed" block in the editor text.
-
         const changes = this.parseDiff(diffText);
-        let editorText = editor.innerText;
-        let originalText = editorText;
-        let success = false;
+        let successCount = 0;
 
-        // We'll process changes in chunks.
-        // Identify contiguous Remove/Add blocks.
-
-        let i = 0;
-        while (i < changes.length) {
+        // Process changes
+        for (let i = 0; i < changes.length; i++) {
             const block = changes[i];
 
-            // Check for strict "Modify" pattern: Remove -> Add
             if (block.type === 'remove') {
                 const searchStr = block.lines.join('\n');
                 let replaceStr = '';
 
-                // Look ahead for Add
                 if (i + 1 < changes.length && changes[i + 1].type === 'add') {
                     replaceStr = changes[i + 1].lines.join('\n');
                     i++; // Skip next
-                } else {
-                    // Just a deletion
-                    replaceStr = '';
                 }
 
-                // Perform replacement
-                // Simple string replace (first occurrence? uniqueness check?)
-                if (editorText.includes(searchStr)) {
-                    // Verify uniqueness to be safe?
-                    if (editorText.indexOf(searchStr) !== editorText.lastIndexOf(searchStr)) {
-                        console.warn('Ambiguous patch: defined text found multiple times.');
-                        // proceed with first? or fail?
-                        // Fail for safety
-                        return false;
-                    }
-
-                    editorText = editorText.replace(searchStr, replaceStr);
-                    success = true;
+                if (this.replaceTextInDOM(editor, searchStr, replaceStr)) {
+                    successCount++;
                 } else {
-                    console.warn('Patch failed: Could not find original text block:', searchStr);
-                    return false;
+                    console.warn('Could not find text block to replace:', searchStr);
                 }
-            } else if (block.type === 'add') {
-                // Pure addition (not following remove)
-                // This usually requires Context to know WHERE to add.
-                // Naive: We can't handle pure additions safely without context matching.
-                // But often AI gives "Context - Add - Context".
-                // We'd need to look at previous context block.
-
-                // If previous block was context, append to that context?
-                // This starts getting complex for a "Basic" patcher.
-                // Let's assume most AI edits are Rewrites (Remove+Add).
-                console.warn('Pure addition not supported in basic patcher yet.');
             }
-            i++;
         }
 
-        if (success) {
-            // Apply text back to editor (preserves paragraphs if we wrap carefully?)
-            // Editor is contentEditable. innerText assignment usually strips tags.
-            // We should try to preserve basic structure.
-            // For now, mapping newlines into <p> or <br> is best effort.
-            const paragraphs = editorText.split(/\n\n+/);
-            const html = paragraphs.map(p => {
-                if (!p.trim()) return '';
-                // Simple escaping
-                return `<p>${this.escapeHtml(p).replace(/\n/g, '<br>')}</p>`;
-            }).join('');
+        return successCount > 0;
+    }
 
-            editor.innerHTML = html;
+    /**
+     * Find text in DOM and replace it while preserving surrounding structure
+     * AND explicitly copying styles to the new element.
+     */
+    replaceTextInDOM(container, searchStr, replaceStr) {
+        if (!searchStr) return false;
+
+        const range = this.findTextRange(container, searchStr);
+        if (!range) return false;
+
+        // Capture styles from the start of the range
+        // We use the parent element of the text node if it's a text node
+        const startNode = range.startContainer.nodeType === Node.TEXT_NODE
+            ? range.startContainer.parentElement
+            : range.startContainer;
+
+        const computedStyle = window.getComputedStyle(startNode);
+        const styleProps = ['color', 'fontSize', 'fontWeight', 'fontStyle', 'textDecoration', 'backgroundColor', 'fontFamily'];
+        const capturedStyles = {};
+
+        styleProps.forEach(prop => {
+            const val = computedStyle[prop];
+            // Copy distinct styles
+            if (val) capturedStyles[prop] = val;
+        });
+
+        // Prepare new content wrapped in span with captured styles
+        const newContent = document.createDocumentFragment();
+        const wrapper = document.createElement('span');
+
+        // Apply captured styles
+        Object.assign(wrapper.style, capturedStyles);
+
+        // Use class list if source had them
+        if (startNode.classList.length > 0) {
+            wrapper.className = startNode.className;
         }
 
-        return success;
+        wrapper.innerHTML = this.parseMarkdown(replaceStr).replace(/\n/g, '<br>');
+        newContent.appendChild(wrapper);
+
+        // Apply replacement
+        range.deleteContents();
+        range.insertNode(newContent);
+
+        // Collapse to end of insertion
+        range.collapse(false);
+
+        return true;
+    }
+
+    /**
+     * Locate a text string across multiple text nodes and return a DOM Range
+     */
+    findTextRange(container, searchText) {
+        const fullText = container.textContent;
+        const startIndex = fullText.indexOf(searchText);
+        if (startIndex === -1) return null;
+
+        const endIndex = startIndex + searchText.length;
+
+        const range = document.createRange();
+        let startFound = false;
+        let endFound = false;
+        let charsCount = 0;
+
+        const walker = document.createTreeWalker(
+            container,
+            NodeFilter.SHOW_TEXT,
+            null,
+            false
+        );
+
+        let node;
+        while ((node = walker.nextNode())) {
+            const nodeLength = node.textContent.length;
+            const nodeStart = charsCount;
+            const nodeEnd = charsCount + nodeLength;
+
+            // Check for start
+            if (!startFound && startIndex >= nodeStart && startIndex < nodeEnd) {
+                range.setStart(node, startIndex - nodeStart);
+                startFound = true;
+            }
+
+            // Check for end
+            if (!endFound && endIndex > nodeStart && endIndex <= nodeEnd) {
+                range.setEnd(node, endIndex - nodeStart);
+                endFound = true;
+                break;
+            }
+
+            charsCount += nodeLength;
+        }
+
+        return (startFound && endFound) ? range : null;
     }
 }

@@ -117,6 +117,54 @@ class NovelWriterApp {
       this.settings.closeModal();
     });
 
+    // Thesaurus modal
+    this.thesaurusMode = 'synonyms'; // 'synonyms' or 'antonyms'
+
+    document.getElementById('btn-thesaurus').addEventListener('click', () => {
+      document.getElementById('thesaurus-modal').classList.add('open');
+      document.getElementById('thesaurus-input').focus();
+    });
+
+    document.getElementById('close-thesaurus').addEventListener('click', () => {
+      document.getElementById('thesaurus-modal').classList.remove('open');
+    });
+
+    document.getElementById('thesaurus-modal').addEventListener('click', (e) => {
+      if (e.target.id === 'thesaurus-modal' || e.target.id === 'thesaurus-backdrop') {
+        document.getElementById('thesaurus-modal').classList.remove('open');
+      }
+    });
+
+    document.getElementById('toggle-synonyms').addEventListener('click', () => {
+      this.thesaurusMode = 'synonyms';
+      document.getElementById('toggle-synonyms').classList.add('active');
+      document.getElementById('toggle-antonyms').classList.remove('active');
+      // Re-search if there's a word
+      const word = document.getElementById('thesaurus-input').value.trim();
+      if (word) this.searchThesaurus(word);
+    });
+
+    document.getElementById('toggle-antonyms').addEventListener('click', () => {
+      this.thesaurusMode = 'antonyms';
+      document.getElementById('toggle-antonyms').classList.add('active');
+      document.getElementById('toggle-synonyms').classList.remove('active');
+      // Re-search if there's a word
+      const word = document.getElementById('thesaurus-input').value.trim();
+      if (word) this.searchThesaurus(word);
+    });
+
+    document.getElementById('thesaurus-search-btn').addEventListener('click', () => {
+      const word = document.getElementById('thesaurus-input').value.trim();
+      if (word) this.searchThesaurus(word);
+    });
+
+    document.getElementById('thesaurus-input').addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        const word = e.target.value.trim();
+        if (word) this.searchThesaurus(word);
+      }
+    });
+
     // Auto-save on content change
     const editorContent = document.getElementById('editor-content');
     let saveTimeout;
@@ -166,10 +214,8 @@ class NovelWriterApp {
 
   // ========== PROJECT MANAGEMENT ==========
   bindSelectionEvents() {
-    const editor = document.getElementById('editor-content');
-    const toolbar = document.getElementById('selection-toolbar');
-
-    if (!editor || !toolbar) return;
+    // Selection toolbar disabled - quick actions moved to scene context menu
+    return;
 
     // Show toolbar on selection
     document.addEventListener('selectionchange', () => {
@@ -663,58 +709,61 @@ class NovelWriterApp {
       sensory: 'Sensory', grammar: 'Grammar', prose: 'Prose', review: 'Review'
     };
 
-    // If we have annotated text, display it with inline suggestions
+    // Add header showing suggestion mode (non-destructive - prepended)
+    const header = document.createElement('div');
+    header.className = 'suggestion-view-header';
+    header.innerHTML = `
+      <span class="suggestion-type">🤖 ${typeLabels[scene.suggestions.type] || 'Suggestions'} Mode</span>
+      <span class="suggestion-count">${suggestions.length} inline suggestion${suggestions.length > 1 ? 's' : ''}</span>
+    `;
+    editor.insertBefore(header, editor.firstChild);
+
+    // ===== SURGICAL INSERTION: Insert suggestion markers into existing styled DOM =====
+    // Parse the annotated text to find where each suggestion was placed
+    // Pattern: Text before [S#: suggestion] Text after
     if (annotatedText) {
-      // Convert [S1: text] blocks to styled interactive elements
-      let styledText = annotatedText.replace(
-        /\[S(\d+):\s*([^\]]+)\]/g,
-        (match, num, text) => {
-          // Convert **keyword** to highlighted spans
-          let highlightedText = text.replace(/\*\*([^*]+)\*\*/g, '<span class="suggestion-keyword">$1</span>');
-          return `<span class="suggestion-inline" data-id="s${num}" data-number="${num}" title="Right-click for options"><span class="suggestion-label">S${num}</span>: ${highlightedText}</span>`;
+      // Extract pairs of (anchor text, suggestion)
+      // We look for sentences/phrases immediately before each [S#:...] tag
+      const suggestionPlacements = this.parseSuggestionPlacements(annotatedText);
+
+      for (const placement of suggestionPlacements) {
+        // Find the anchor text in the DOM and insert suggestion after it
+        const inserted = this.insertSuggestionMarker(
+          editor,
+          placement.anchor,
+          placement.number,
+          placement.text
+        );
+        if (!inserted) {
+          console.warn(`Could not find anchor for S${placement.number}:`, placement.anchor);
         }
-      );
+      }
+    }
 
-      // Wrap in a container
-      const suggestionView = document.createElement('div');
-      suggestionView.className = 'suggestion-view';
-      suggestionView.innerHTML = `
-        <div class="suggestion-view-header">
-          <span class="suggestion-type">🤖 ${typeLabels[scene.suggestions.type] || 'Suggestions'} Mode</span>
-          <span class="suggestion-count">${suggestions.length} inline suggestion${suggestions.length > 1 ? 's' : ''}</span>
-        </div>
-        <div class="suggestion-view-content">${styledText.replace(/\n/g, '<br>')}</div>
-      `;
+    // Bind right-click handlers for inline suggestion blocks
+    editor.querySelectorAll('.suggestion-inline').forEach(block => {
+      block.addEventListener('contextmenu', (e) => {
+        e.preventDefault();
+        const suggestionId = block.dataset.id;
+        const suggestionNumber = block.dataset.number;
 
-      // Replace editor content with suggestion view
-      editor.innerHTML = '';
-      editor.appendChild(suggestionView);
-
-      // Bind right-click handlers for inline suggestion blocks
-      editor.querySelectorAll('.suggestion-inline').forEach(block => {
-        block.addEventListener('contextmenu', (e) => {
-          e.preventDefault();
-          const suggestionId = block.dataset.id;
-          const suggestionNumber = block.dataset.number;
-
-          this.treeNav.contextMenu.show(e.clientX, e.clientY, [
-            { label: '💬 Expand in Chat', onClick: () => this.expandSuggestionInChat(scene, suggestionId, suggestionNumber) },
-            { divider: true },
-            { label: '🗑️ Remove This Suggestion', onClick: () => this.removeInlineSuggestion(scene, suggestionId) }
-          ]);
-        });
+        this.treeNav.contextMenu.show(e.clientX, e.clientY, [
+          { label: '💬 Expand in Chat', onClick: () => this.expandSuggestionInChat(scene, suggestionId, suggestionNumber) },
+          { divider: true },
+          { label: '🗑️ Remove This Suggestion', onClick: () => this.removeInlineSuggestion(scene, suggestionId) }
+        ]);
       });
-    } else {
-      // Fallback to bottom panel if no annotated text
-      const suggestionPanel = document.createElement('div');
-      suggestionPanel.className = 'suggestion-panel';
-      suggestionPanel.innerHTML = `
-        <div class="suggestion-header">
-          <span class="suggestion-type">🤖 ${typeLabels[scene.suggestions.type] || 'Suggestions'}</span>
-          <span class="suggestion-count">${suggestions.length} suggestion${suggestions.length > 1 ? 's' : ''}</span>
-        </div>
+    });
+
+    // Add general suggestions at the end (after "---" separator) as a panel
+    const generalSuggestions = this.extractGeneralSuggestions(annotatedText);
+    if (generalSuggestions.length > 0) {
+      const generalPanel = document.createElement('div');
+      generalPanel.className = 'suggestion-panel';
+      generalPanel.innerHTML = `
+        <hr style="border: 1px dashed var(--border-color); margin: 24px 0;">
         <div class="suggestion-list">
-          ${suggestions.map(s => `
+          ${generalSuggestions.map(s => `
             <div class="suggestion-block" data-id="${s.id}" data-number="${s.number}">
               <span class="suggestion-number">S${s.number}</span>
               <span class="suggestion-text">${s.text}</span>
@@ -722,24 +771,119 @@ class NovelWriterApp {
           `).join('')}
         </div>
       `;
+      editor.appendChild(generalPanel);
+    }
+  }
 
-      editor.appendChild(suggestionPanel);
+  /**
+   * Parse the annotated text to extract suggestion placements
+   * Format: "Anchor sentence. [S1: suggestion text]"
+   */
+  parseSuggestionPlacements(annotatedText) {
+    const placements = [];
+    // Match text before each suggestion tag
+    const regex = /([^.\n]*\.)\s*\[S(\d+):\s*([^\]]+)\]/g;
+    let match;
 
-      // Bind right-click handlers
-      suggestionPanel.querySelectorAll('.suggestion-block').forEach(block => {
-        block.addEventListener('contextmenu', (e) => {
-          e.preventDefault();
-          const suggestionId = block.dataset.id;
-          const suggestionNumber = block.dataset.number;
+    while ((match = regex.exec(annotatedText)) !== null) {
+      const anchor = match[1].trim();
+      const number = parseInt(match[2]);
+      const text = match[3].trim().replace(/\*\*([^*]+)\*\*/g, '<span class="suggestion-keyword">$1</span>');
 
-          this.treeNav.contextMenu.show(e.clientX, e.clientY, [
-            { label: '💬 Expand in Chat', onClick: () => this.expandSuggestionInChat(scene, suggestionId, suggestionNumber) },
-            { divider: true },
-            { label: '🗑️ Remove Suggestion', onClick: () => this.removeSuggestion(scene, suggestionId) }
-          ]);
-        });
+      // Only use inline suggestions (general ones appear after ---)
+      if (!annotatedText.substring(0, match.index).includes('---')) {
+        placements.push({ anchor, number, text });
+      }
+    }
+
+    return placements;
+  }
+
+  /**
+   * Insert a suggestion marker after the anchor text in the DOM
+   */
+  insertSuggestionMarker(container, anchorText, number, suggestionText) {
+    if (!anchorText || !anchorText.trim()) return false;
+
+    // Find the anchor in the DOM
+    const range = this.findTextRange(container, anchorText);
+    if (!range) return false;
+
+    // Create the suggestion marker
+    const marker = document.createElement('span');
+    marker.className = 'suggestion-inline';
+    marker.dataset.id = `s${number}`;
+    marker.dataset.number = number;
+    marker.title = 'Right-click for options';
+    marker.innerHTML = `<span class="suggestion-label">S${number}</span>: ${suggestionText}`;
+
+    // Insert after the anchor (collapse range to end, then insert)
+    range.collapse(false);
+    range.insertNode(document.createTextNode(' ')); // Small space
+    range.insertNode(marker);
+
+    return true;
+  }
+
+  /**
+   * Find a text string in the DOM and return a Range
+   */
+  findTextRange(container, searchText) {
+    const fullText = container.textContent;
+    const startIndex = fullText.indexOf(searchText);
+    if (startIndex === -1) return null;
+
+    const endIndex = startIndex + searchText.length;
+    const range = document.createRange();
+    let startFound = false;
+    let endFound = false;
+    let charsCount = 0;
+
+    const walker = document.createTreeWalker(container, NodeFilter.SHOW_TEXT, null, false);
+    let node;
+
+    while ((node = walker.nextNode())) {
+      const nodeLength = node.textContent.length;
+      const nodeStart = charsCount;
+      const nodeEnd = charsCount + nodeLength;
+
+      if (!startFound && startIndex >= nodeStart && startIndex < nodeEnd) {
+        range.setStart(node, startIndex - nodeStart);
+        startFound = true;
+      }
+
+      if (!endFound && endIndex > nodeStart && endIndex <= nodeEnd) {
+        range.setEnd(node, endIndex - nodeStart);
+        endFound = true;
+        break;
+      }
+
+      charsCount += nodeLength;
+    }
+
+    return (startFound && endFound) ? range : null;
+  }
+
+  /**
+   * Extract general suggestions (after ---) from annotated text
+   */
+  extractGeneralSuggestions(annotatedText) {
+    if (!annotatedText || !annotatedText.includes('---')) return [];
+
+    const afterSeparator = annotatedText.split('---')[1] || '';
+    const suggestions = [];
+    const regex = /\[S(\d+):\s*([^\]]+)\]/g;
+    let match;
+
+    while ((match = regex.exec(afterSeparator)) !== null) {
+      suggestions.push({
+        id: `s${match[1]}`,
+        number: parseInt(match[1]),
+        text: match[2].trim().replace(/\*\*([^*]+)\*\*/g, '<span class="suggestion-keyword">$1</span>')
       });
     }
+
+    return suggestions;
   }
 
   removeInlineSuggestion(scene, suggestionId) {
@@ -833,18 +977,27 @@ class NovelWriterApp {
     const { type, partId, chapterId, sceneId, noteId } = this.currentContext;
     const editor = document.getElementById('editor-content');
 
+    // Clone editor to strip suggestion elements without affecting the displayed DOM
+    const clone = editor.cloneNode(true);
+
+    // Remove all suggestion-related elements before saving
+    clone.querySelectorAll('.suggestion-inline, .suggestion-view-header, .suggestion-panel').forEach(el => el.remove());
+
+    // Get clean content
+    const cleanContent = clone.innerHTML;
+
     if (type === 'scene') {
       const part = this.state.manuscript.parts.find(p => p.id === partId);
       const chapter = part?.chapters.find(c => c.id === chapterId);
       const scene = chapter?.scenes.find(s => s.id === sceneId);
       if (scene) {
-        scene.content = editor.innerHTML;
-        scene.wordCount = editor.innerText.trim().split(/\s+/).filter(w => w).length;
+        scene.content = cleanContent;
+        scene.wordCount = clone.innerText.trim().split(/\s+/).filter(w => w).length;
       }
     } else if (type === 'note') {
       const note = this.state.notes.items.find(n => n.id === noteId);
       if (note) {
-        note.content = editor.innerHTML;
+        note.content = cleanContent;
       }
     }
 
@@ -859,6 +1012,61 @@ class NovelWriterApp {
 
   save() {
     this.storage.save(this.state);
+  }
+
+  /**
+   * Search thesaurus using Datamuse API
+   */
+  async searchThesaurus(word) {
+    const resultsContainer = document.getElementById('thesaurus-results');
+    resultsContainer.innerHTML = '<p class="thesaurus-loading">Searching...</p>';
+
+    try {
+      // Datamuse API endpoints
+      // ml = means like (synonyms), rel_ant = antonyms
+      const endpoint = this.thesaurusMode === 'synonyms'
+        ? `https://api.datamuse.com/words?ml=${encodeURIComponent(word)}&max=50`
+        : `https://api.datamuse.com/words?rel_ant=${encodeURIComponent(word)}&max=50`;
+
+      const response = await fetch(endpoint);
+      const data = await response.json();
+
+      if (data.length === 0) {
+        resultsContainer.innerHTML = `<p class="thesaurus-no-results">No ${this.thesaurusMode} found for "${word}"</p>`;
+        return;
+      }
+
+      // Render results as clickable word chips
+      const words = data.map(item => item.word);
+      resultsContainer.innerHTML = `
+        <ul class="thesaurus-word-list">
+          ${words.map(w => `<li class="thesaurus-word" data-word="${w}">${w}</li>`).join('')}
+        </ul>
+      `;
+
+      // Add click handlers to copy word to clipboard
+      resultsContainer.querySelectorAll('.thesaurus-word').forEach(el => {
+        el.addEventListener('click', () => {
+          const selectedWord = el.dataset.word;
+          navigator.clipboard.writeText(selectedWord).then(() => {
+            // Visual feedback
+            const original = el.textContent;
+            el.textContent = '✓ Copied!';
+            el.style.background = 'var(--accent-primary)';
+            el.style.color = 'white';
+            setTimeout(() => {
+              el.textContent = original;
+              el.style.background = '';
+              el.style.color = '';
+            }, 1000);
+          });
+        });
+      });
+
+    } catch (error) {
+      console.error('Thesaurus search failed:', error);
+      resultsContainer.innerHTML = '<p class="thesaurus-error">Search failed. Please check your internet connection.</p>';
+    }
   }
 }
 

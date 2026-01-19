@@ -1379,7 +1379,17 @@ Return the full text with suggestions:`;
     clearSuggestions(sceneId, chapterId, partId) {
         const scene = this.findScene(sceneId, chapterId, partId);
         if (scene) {
+            // Delete suggestion data
             delete scene.suggestions;
+
+            // Also strip any suggestion elements that may have been baked into scene.content
+            if (scene.content) {
+                const tempDiv = document.createElement('div');
+                tempDiv.innerHTML = scene.content;
+                tempDiv.querySelectorAll('.suggestion-inline, .suggestion-view-header, .suggestion-panel').forEach(el => el.remove());
+                scene.content = tempDiv.innerHTML;
+            }
+
             this.app.save();
             // Re-load scene
             this.selectItem(this.container.querySelector(`[data-id="${sceneId}"]`));

@@ -61,15 +61,31 @@ export class ContextManager {
             const part = this.app.state.manuscript.parts.find(p => p.id === ctx.partId);
             const chapter = part?.chapters.find(c => c.id === ctx.chapterId);
             const scene = chapter?.scenes.find(s => s.id === ctx.sceneId);
-            focusInfo = { type: 'scene', title: scene?.title, chapterTitle: chapter?.title };
+            focusInfo = {
+                type: 'scene',
+                title: scene?.title,
+                chapterTitle: chapter?.title,
+                partTitle: part?.displayTitle || part?.title,
+                fullPath: `${part?.displayTitle || part?.title} > ${chapter?.title} > ${scene?.title}`
+            };
         } else if (ctx.type === 'chapter') {
             currentPartId = ctx.partId;
             const part = this.app.state.manuscript.parts.find(p => p.id === ctx.partId);
             const chapter = part?.chapters.find(c => c.id === ctx.chapterId);
-            focusInfo = { type: 'chapter', title: chapter?.title };
+            focusInfo = {
+                type: 'chapter',
+                title: chapter?.title,
+                partTitle: part?.displayTitle || part?.title,
+                fullPath: `${part?.displayTitle || part?.title} > ${chapter?.title}`
+            };
         } else if (ctx.type === 'part') {
             currentPartId = ctx.partId;
-            focusInfo = { type: 'part' };
+            const part = this.app.state.manuscript.parts.find(p => p.id === ctx.partId);
+            focusInfo = {
+                type: 'part',
+                title: part?.displayTitle || part?.title,
+                fullPath: part?.displayTitle || part?.title
+            };
         } else if (ctx.type === 'book') {
             // For book context, use special handling
             return this.getFullBookContext();
@@ -338,6 +354,15 @@ export class ContextManager {
         } = options;
 
         let context = '';
+
+        // Add USER'S CURRENT FOCUS at the very beginning
+        const activeForFocus = this.getActiveContentContext();
+        if (activeForFocus?.focusInfo?.fullPath) {
+            context += `# 📍 USER'S CURRENT FOCUS\n`;
+            context += `The user is currently viewing: **${activeForFocus.focusInfo.fullPath}**\n`;
+            context += `When the user says "here", "this scene", "this chapter", etc., they are referring to this location.\n`;
+            context += `\n---\n\n`;
+        }
 
         if (includeStructure) {
             context += this.getStructureOverview() + '\n---\n\n';
