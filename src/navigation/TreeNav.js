@@ -57,7 +57,7 @@ export class TreeNav {
       ${this.renderSection('ANALYSIS', 'analysis', this.renderAnalysis())}
       ${this.renderSection('PLOT', 'plot', this.renderPlot(), true)}
       ${this.renderSection('CHARACTERS', 'characters', this.renderCharacters(), true)}
-      ${this.renderSection('STORY NOTES', 'notes', this.renderNotes(), true)}
+      ${this.renderSection('WORLD INFO', 'worldinfo', this.renderWorldInfo())}
     `;
 
         this.bindTreeEvents();
@@ -300,13 +300,31 @@ export class TreeNav {
         return html || '<div class="tree-item-empty">No casts yet</div>';
     }
 
-    renderNotes() {
-        const notes = this.app.state.notes.items || [];
-        if (notes.length === 0) {
-            return '<div class="tree-item-empty">No notes yet</div>';
+    renderWorldInfo() {
+        const worldInfo = this.app.state.worldInfo?.parts || {};
+        const parts = this.app.state.manuscript.parts || [];
+
+        // Get world info that exists, in part order
+        const worldInfoItems = parts
+            .filter(part => worldInfo[part.id])
+            .map(part => ({
+                id: part.id,
+                title: part.displayTitle || part.title,
+                isLoading: worldInfo[part.id].isLoading
+            }));
+
+        if (worldInfoItems.length === 0) {
+            return '<div class="tree-item-empty">Right-click a Part → Extract Details</div>';
         }
-        return notes.map(note =>
-            this.renderItem({ section: 'notes', id: note.id, type: 'note', label: note.title, icon: 'doc' })
+
+        return worldInfoItems.map(item =>
+            this.renderItem({
+                section: 'worldinfo',
+                id: item.id,
+                type: 'worldinfo',
+                label: `${item.title} World Info${item.isLoading ? ' ⏳' : ''}`,
+                icon: 'globe'
+            })
         ).join('');
     }
 
@@ -376,7 +394,8 @@ export class TreeNav {
             users: '<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>',
             user: '<path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>',
             summary: '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14,2 14,8 20,8"/><line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="17" x2="12" y2="17"/>',
-            analysis: '<rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="9" y1="21" x2="9" y2="9"/><path d="M14 14h.01"/>'
+            analysis: '<rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="9" y1="21" x2="9" y2="9"/><path d="M14 14h.01"/>',
+            globe: '<circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>'
         };
 
         const paddingLeft = 12 + (depth * 16);
@@ -449,11 +468,13 @@ export class TreeNav {
             case 'part':
                 const hasSummary = this.app.state.summaries?.parts?.[id];
                 const hasAnalysis = this.app.state.analysis?.parts?.[id];
+                const hasWorldInfo = this.app.state.worldInfo?.parts?.[id];
                 items = [
                     { label: 'Add Chapter', onClick: () => this.addChapter(id) },
                     { divider: true },
                     { label: hasSummary ? '🔄 Regenerate Summary' : '📝 Generate Summary', onClick: () => this.generatePartSummary(id) },
                     { label: hasAnalysis ? '🔄 Regenerate Analysis' : '🔍 Agent Analysis', onClick: () => this.generatePartAnalysis(id) },
+                    { label: hasWorldInfo ? '🔄 Update Details' : '📖 Extract Details', onClick: () => this.generateWorldInfo(id, hasWorldInfo) },
                     { divider: true },
                     { label: 'Rename', onClick: () => this.rename('part', id) },
                     { label: 'Delete', onClick: () => this.deletePart(id) }
@@ -560,6 +581,7 @@ export class TreeNav {
             case 'note': this.loadNote(id); break;
             case 'summary': this.loadSummary(id); break;
             case 'analysis': this.loadAnalysis(id); break;
+            case 'worldinfo': this.loadWorldInfo(id); break;
         }
     }
 
@@ -1806,5 +1828,211 @@ Return your analysis as a JSON object following the exact structure specified.`;
         return result;
     }
 
+    // ========== WORLD INFO ==========
+
+    async generateWorldInfo(partId, isUpdate = false) {
+        const part = this.app.state.manuscript.parts.find(p => p.id === partId);
+        if (!part) return;
+
+        const partTitle = part.displayTitle || part.title;
+        const previousInfo = isUpdate ? this.app.state.worldInfo?.parts?.[partId] : null;
+
+        // Set loading state
+        if (!this.app.state.worldInfo) this.app.state.worldInfo = { parts: {} };
+        this.app.state.worldInfo.parts[partId] = { isLoading: true, generatedAt: new Date().toISOString() };
+        this.app.save();
+        this.render();
+        this.loadWorldInfo(partId); // Show loading screen
+
+        // Build full manuscript content
+        let manuscriptContent = '';
+        const parts = this.app.state.manuscript.parts || [];
+        parts.forEach(p => {
+            manuscriptContent += `\n\n## ${p.displayTitle || p.title}\n\n`;
+            p.chapters.forEach(ch => {
+                manuscriptContent += `### ${ch.displayTitle || ch.title}\n\n`;
+                ch.scenes?.forEach(scene => {
+                    const cleanContent = (scene.content || '').replace(/<[^>]*>/g, ' ').replace(/\[S\d+:.*?\]/g, '');
+                    manuscriptContent += `**${scene.title}**\n${cleanContent}\n\n`;
+                });
+            });
+        });
+
+        // Build prompt - PLAIN TEXT format (no JSON)
+        const systemPrompt = `You are a literary analyst extracting world information from a novel manuscript.
+Your job is to identify key details the writer should track for consistency.
+
+Return your analysis in PLAIN TEXT using EXACTLY these section headers:
+
+=== ESTABLISHED FACTS ===
+(List important facts that must stay consistent - backstory, rules, truths)
+
+=== KEY PLOT POINTS ===
+(List major events that happened in this part)
+
+=== IMPORTANT NAMES ===
+(List new characters, places, items introduced with brief context)
+
+=== TIMELINE ===
+(List sequence of events with relative timing)
+
+=== CHARACTER RELATIONSHIPS ===
+(List how characters relate to each other at the end of this part)
+
+=== LOCATIONS ===
+(List places where scenes occur with brief descriptions)
+
+Use bullet points (- ) for each item. Be concise. Only include what's actually in the text.`;
+
+        let userPrompt = `Extract world information from PART: "${partTitle}"
+
+Full Manuscript:
+${manuscriptContent}`;
+
+        if (isUpdate && previousInfo) {
+            userPrompt += `\n\nPrevious world info to update:\n${previousInfo.rawText || 'None'}`;
+        }
+
+        try {
+            const response = await this.app.aiService.sendMessage([
+                { role: 'user', content: userPrompt }
+            ], {
+                mode: 'quick',
+                systemPrompt: systemPrompt
+            });
+
+            // Parse plain text response by section headers
+            console.log('--- RAW AI RESPONSE ---');
+            console.log(response);
+            console.log('-----------------------');
+
+            const parseSection = (text, sectionName) => {
+                const regex = new RegExp(`===\\s*${sectionName}\\s*===([\\s\\S]*?)(?====|$)`, 'i');
+                const match = text.match(regex);
+                if (!match) return [];
+
+                // Extract lines, remove empty ones, and clean up bullets
+                const lines = match[1].split('\n')
+                    .map(line => line.trim())
+                    .filter(line => line.length > 0 && !line.startsWith('(')) // Ignore empty lines and parenthetical instructions
+                    .map(line => line.replace(/^[-•*]\s*/, '')); // Remove bullet points if present
+
+                return lines;
+            };
+
+            const worldInfoData = {
+                facts: parseSection(response, 'ESTABLISHED FACTS'),
+                plotPoints: parseSection(response, 'KEY PLOT POINTS'),
+                names: parseSection(response, 'IMPORTANT NAMES'),
+                timeline: parseSection(response, 'TIMELINE'),
+                relationships: parseSection(response, 'CHARACTER RELATIONSHIPS'),
+                locations: parseSection(response, 'LOCATIONS'),
+                rawText: response // Store raw text for updates
+            };
+
+            // Save to state
+            this.app.state.worldInfo.parts[partId] = {
+                ...worldInfoData,
+                generatedAt: new Date().toISOString(),
+                isLoading: false
+            };
+
+            this.app.save();
+            this.render();
+            this.loadWorldInfo(partId);
+
+        } catch (error) {
+            console.error('World info generation failed:', error);
+            this.app.state.worldInfo.parts[partId] = {
+                facts: ['Generation failed: ' + error.message],
+                plotPoints: [],
+                names: [],
+                timeline: [],
+                relationships: [],
+                locations: [],
+                generatedAt: new Date().toISOString(),
+                isLoading: false
+            };
+            this.app.save();
+            this.render();
+            this.loadWorldInfo(partId);
+        }
+    }
+
+    loadWorldInfo(partId) {
+        const worldInfo = this.app.state.worldInfo?.parts?.[partId];
+        const part = this.app.state.manuscript.parts.find(p => p.id === partId);
+        const partTitle = part?.displayTitle || part?.title || 'Unknown Part';
+
+        const editorContent = document.getElementById('editor-content');
+        if (!editorContent) return;
+
+        if (!worldInfo) {
+            editorContent.innerHTML = `<div class="world-info-container">
+                <div class="world-info-header">📖 ${partTitle} - World Info</div>
+                <div class="world-info-empty">No world info yet. Right-click the part → "Extract Details"</div>
+            </div>`;
+            return;
+        }
+
+        if (worldInfo.isLoading) {
+            editorContent.innerHTML = `<div class="world-info-container">
+                <div class="world-info-header">📖 ${partTitle} - World Info</div>
+                <div class="world-info-loading">
+                    <div class="loading-spinner large"></div>
+                    <div>Extracting world details...</div>
+                    <div class="loading-subtext">Reading your manuscript and identifying key information</div>
+                </div>
+            </div>`;
+            return;
+        }
+
+        const renderList = (items, emptyText = 'None') => {
+            if (!items || items.length === 0) return `<div class="world-info-empty-section">${emptyText}</div>`;
+            if (typeof items[0] === 'string') {
+                return `<ul class="world-info-list">${items.map(i => `<li>${i}</li>`).join('')}</ul>`;
+            }
+            return `<ul class="world-info-list">${items.map(i => `<li><strong>${i.name || i.event || i.characters || ''}</strong>: ${i.context || i.when || i.status || i.description || ''}</li>`).join('')}</ul>`;
+        };
+
+        editorContent.innerHTML = `
+            <div class="world-info-container">
+                <div class="world-info-header main-view-header">
+                    <span>📖 ${partTitle} - World Info</span>
+                    <span class="world-info-date">Updated: ${new Date(worldInfo.generatedAt).toLocaleString()}</span>
+                </div>
+                
+                <div class="world-info-section">
+                    <h3>📌 Established Facts</h3>
+                    ${renderList(worldInfo.facts, 'No established facts identified')}
+                </div>
+
+                <div class="world-info-section">
+                    <h3>🎯 Key Plot Points</h3>
+                    ${renderList(worldInfo.plotPoints, 'No major plot points in this part')}
+                </div>
+
+                <div class="world-info-section">
+                    <h3>📛 Important Names</h3>
+                    ${renderList(worldInfo.names, 'No new names introduced')}
+                </div>
+
+                <div class="world-info-section">
+                    <h3>⏱️ Timeline</h3>
+                    ${renderList(worldInfo.timeline, 'No timeline events')}
+                </div>
+
+                <div class="world-info-section">
+                    <h3>💕 Character Relationships</h3>
+                    ${renderList(worldInfo.relationships, 'No relationships identified')}
+                </div>
+
+                <div class="world-info-section">
+                    <h3>📍 Locations</h3>
+                    ${renderList(worldInfo.locations, 'No locations mentioned')}
+                </div>
+            </div>
+        `;
+    }
 
 }

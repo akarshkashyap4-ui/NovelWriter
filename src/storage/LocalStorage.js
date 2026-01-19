@@ -166,6 +166,8 @@ export class Storage {
       summaries: { ...defaults.summaries, ...migrated.summaries },
       // Agent Analysis
       analysis: { ...defaults.analysis, ...migrated.analysis },
+      // World Info (Phase 5)
+      worldInfo: { ...defaults.worldInfo, ...migrated.worldInfo },
       // AI Conversations
       conversations: migrated.conversations || defaults.conversations,
       activeConversationId: migrated.activeConversationId || defaults.activeConversationId
@@ -245,6 +247,10 @@ export class Storage {
       // Agent Analysis (Phase 2)
       analysis: {
         parts: {}
+      },
+      // World Info (Phase 5)
+      worldInfo: {
+        parts: {} // { partId: { generatedAt, facts, plotPoints, names, timeline, relationships, locations } }
       },
       // AI Agent Conversations (per-project)
       conversations: [],

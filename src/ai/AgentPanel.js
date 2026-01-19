@@ -97,7 +97,8 @@ export class AgentPanel {
             auto: '#3b82f6',
             quick: '#22c55e',
             planning: '#f59e0b',
-            chatty: '#a855f7'
+            chatty: '#a855f7',
+            brainstorm: '#f97316' // Orange for creative energy
         };
 
         if (this.statusIndicator) {
