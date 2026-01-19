@@ -99,6 +99,11 @@ class NovelWriterApp {
       this.closeReadingMode();
     });
 
+    // Book Dashboard
+    document.getElementById('btn-dashboard').addEventListener('click', () => {
+      this.treeNav.loadDashboard();
+    });
+
     // Settings modal
     document.getElementById('btn-settings').addEventListener('click', () => {
       this.settings.openModal();

@@ -2076,4 +2076,324 @@ ${manuscriptContent}`;
         }
     }
 
+    // ========== BOOK DASHBOARD ==========
+    loadDashboard() {
+        const editor = document.getElementById('editor-content');
+        const state = this.app.state;
+        const parts = state.manuscript.parts || [];
+
+        // Calculate stats
+        let totalWords = 0;
+        let totalScenes = 0;
+        const tocItems = parts.map(part => {
+            let partWords = 0;
+            const chapters = part.chapters.map(ch => {
+                let chapterWords = 0;
+                ch.scenes?.forEach(scene => {
+                    const text = (scene.content || '').replace(/<[^>]*>/g, '');
+                    const words = text.trim().split(/\s+/).filter(w => w).length;
+                    chapterWords += words;
+                    totalScenes++;
+                });
+                partWords += chapterWords;
+                return { title: ch.displayTitle || ch.title, words: chapterWords, id: ch.id, partId: part.id };
+            });
+            totalWords += partWords;
+            return { title: part.displayTitle || part.title, words: partWords, chapters, id: part.id };
+        });
+
+        const synopsis = state.metadata.synopsis || '';
+
+        editor.innerHTML = `
+            <div class="dashboard-container">
+                <div class="dashboard-header">
+                    <h1>📚 ${state.metadata.title || 'Untitled Book'}</h1>
+                    <p class="dashboard-author">by ${state.metadata.author || 'Unknown Author'}</p>
+                    <div class="dashboard-stats">
+                        <span><strong>${parts.length}</strong> Parts</span>
+                        <span><strong>${totalScenes}</strong> Scenes</span>
+                        <span><strong>${totalWords.toLocaleString()}</strong> Words</span>
+                    </div>
+                </div>
+
+                <div class="dashboard-section">
+                    <div class="dashboard-section-header">
+                        <h2>📝 Synopsis</h2>
+                        <button class="btn-small btn-primary" id="btn-generate-synopsis">✨ Generate</button>
+                    </div>
+                    <textarea id="synopsis-editor" class="synopsis-textarea" placeholder="Write or generate a synopsis for your book...">${synopsis}</textarea>
+                </div>
+
+                <div class="dashboard-section">
+                    <h2>📖 Table of Contents</h2>
+                    <div class="toc-list">
+                        ${tocItems.map((part, pIdx) => `
+                            <div class="toc-part">
+                                <div class="toc-part-header" data-part-id="${part.id}">
+                                    <span class="toc-part-title">Part ${pIdx + 1}: ${part.title}</span>
+                                    <span class="toc-words">${part.words.toLocaleString()} words</span>
+                                </div>
+                                <div class="toc-chapters">
+                                    ${part.chapters.map((ch, cIdx) => `
+                                        <div class="toc-chapter" data-chapter-id="${ch.id}" data-part-id="${ch.partId}">
+                                            <span class="toc-chapter-title">Chapter ${cIdx + 1}: ${ch.title}</span>
+                                            <span class="toc-words">${ch.words.toLocaleString()}</span>
+                                        </div>
+                                    `).join('')}
+                                </div>
+                            </div>
+                        `).join('')}
+                    </div>
+                </div>
+
+                <div class="dashboard-actions">
+                    <button class="btn-large btn-secondary" id="btn-print-book">🖨️ Export / Print Book</button>
+                </div>
+            </div>
+        `;
+
+        // Bind events
+        document.getElementById('btn-generate-synopsis').addEventListener('click', () => this.generateSynopsis());
+        document.getElementById('btn-print-book').addEventListener('click', () => this.printBook());
+
+        document.getElementById('synopsis-editor').addEventListener('input', (e) => {
+            this.app.state.metadata.synopsis = e.target.value;
+            this.app.save();
+        });
+
+        // ToC navigation
+        editor.querySelectorAll('.toc-part-header').forEach(el => {
+            el.addEventListener('click', () => this.app.loadPartView(el.dataset.partId));
+        });
+        editor.querySelectorAll('.toc-chapter').forEach(el => {
+            el.addEventListener('click', () => this.app.loadChapterView(el.dataset.partId, el.dataset.chapterId));
+        });
+    }
+
+    async generateSynopsis() {
+        const state = this.app.state;
+        const parts = state.manuscript.parts || [];
+
+        // Check all parts have summaries
+        const missingSummaries = parts.filter(p => !state.summaries?.parts?.[p.id]);
+        if (missingSummaries.length > 0) {
+            alert(`Cannot generate synopsis: The following parts are missing summaries:\n\n${missingSummaries.map(p => `- ${p.displayTitle || p.title}`).join('\n')}\n\nPlease generate summaries for all parts first.`);
+            return;
+        }
+
+        const synopsisBtn = document.getElementById('btn-generate-synopsis');
+        synopsisBtn.disabled = true;
+        synopsisBtn.textContent = '⏳ Generating...';
+
+        try {
+            // Build context from summaries
+            let context = `Book: ${state.metadata.title}\nAuthor: ${state.metadata.author}\n\nPart Summaries:\n`;
+            parts.forEach(part => {
+                const summary = state.summaries.parts[part.id];
+                context += `\n## ${part.displayTitle || part.title}\n${summary.content}\n`;
+            });
+
+            const systemPrompt = `You are a book editor writing a synopsis for a novel.
+Write a compelling, engaging 1-page synopsis (250-400 words) that covers:
+- The main characters and their goals
+- The central conflict
+- The key plot points
+- The emotional arc
+
+Write in present tense, third person. Make it interesting enough to hook a reader.
+Return ONLY the synopsis text, no headers or labels.`;
+
+            const response = await this.app.aiService.sendMessage([
+                { role: 'user', content: `Write a synopsis for this novel:\n\n${context}` }
+            ], { systemPrompt });
+
+            state.metadata.synopsis = response;
+            this.app.save();
+
+            document.getElementById('synopsis-editor').value = response;
+        } catch (error) {
+            alert('Failed to generate synopsis: ' + error.message);
+        } finally {
+            synopsisBtn.disabled = false;
+            synopsisBtn.textContent = '✨ Generate';
+        }
+    }
+
+    printBook() {
+        const state = this.app.state;
+        const parts = state.manuscript.parts || [];
+        const synopsis = state.metadata.synopsis || '';
+
+        let bookHtml = `
+            <!DOCTYPE html>
+            <html>
+            <head>
+                <title>${state.metadata.title || 'Book'}</title>
+                <style>
+                    body {
+                        font-family: Georgia, 'Times New Roman', serif;
+                        font-size: 12pt;
+                        line-height: 1.7;
+                        color: #1a1a1a;
+                        max-width: 6.5in;
+                        margin: 0 auto;
+                        padding: 0;
+                    }
+                    
+                    .cover-page {
+                        min-height: 100vh;
+                        display: flex;
+                        flex-direction: column;
+                        align-items: center;
+                        text-align: center;
+                        padding-top: 3in;
+                        page-break-after: always;
+                    }
+                    .cover-title {
+                        font-family: Georgia, serif;
+                        font-size: 42pt;
+                        font-weight: bold;
+                        margin-bottom: 0.3em;
+                    }
+                    .cover-subtitle {
+                        font-family: Georgia, serif;
+                        font-size: 14pt;
+                        font-weight: normal;
+                        color: #555;
+                        text-transform: uppercase;
+                        letter-spacing: 0.1em;
+                        margin-bottom: 1em;
+                    }
+                    .cover-author {
+                        font-family: Georgia, serif;
+                        font-size: 14pt;
+                        font-style: italic;
+                        margin-top: 2em;
+                    }
+                    .cover-synopsis {
+                        margin-top: 2em;
+                        max-width: 85%;
+                        font-style: italic;
+                        font-size: 10pt;
+                        color: #444;
+                        line-height: 1.5;
+                        text-align: justify;
+                        margin-bottom: 3em;
+                    }
+                    
+                    .aesthetic-line {
+                        border: 0;
+                        height: 1px;
+                        background-image: linear-gradient(to right, rgba(0, 0, 0, 0), rgba(0, 0, 0, 0.75), rgba(0, 0, 0, 0));
+                        margin: 2em auto;
+                        width: 60%;
+                    }
+                    
+                    .part-title {
+                        text-align: center;
+                        page-break-before: always;
+                        padding-top: 30vh;
+                    }
+                    .part-title h2 { 
+                        font-family: Georgia, serif;
+                        font-size: 20pt; 
+                        font-weight: normal;
+                        text-transform: uppercase;
+                        letter-spacing: 0.15em;
+                    }
+                    
+                    .chapter {
+                        page-break-before: always;
+                        margin-top: 2in;
+                    }
+                    .chapter h3 {
+                        font-size: 20pt;
+                        text-align: center;
+                        margin-bottom: 1em;
+                        font-weight: normal;
+                    }
+                    
+                    .scene { margin-bottom: 1.5em; }
+                    .scene-break { text-align: center; margin: 2em 0; font-size: 1.2em; color: #888; }
+                    .scene-break::before { content: "❖"; }
+                    
+                    p { text-indent: 1.5em; margin: 0; text-align: justify; }
+                    p:first-of-type { text-indent: 0; }
+                    
+                    @media print {
+                        body { padding: 0; margin: 0; }
+                        .cover-page { height: 100vh; }
+                        @page { margin: 1in; }
+                    }
+                </style>
+            </head>
+            <body>
+                <div class="cover-page">
+                    <div>
+                        <div class="cover-title">${state.metadata.title || 'Untitled'}</div>
+                        ${state.metadata.subtitle ? `<div class="cover-subtitle">${state.metadata.subtitle}</div>` : ''}
+                    </div>
+                    ${synopsis ? `<div class="cover-synopsis">${synopsis.replace(/\n/g, '<br>')}</div>` : ''}
+                    <div class="cover-author">${state.metadata.author || ''}</div>
+                    <hr class="aesthetic-line">
+                </div>
+        `;
+
+        parts.forEach((part, pIdx) => {
+            // PARTS HIDDEN: We iterate but do NOT print a Part Title page.
+
+            part.chapters.forEach((chapter, cIdx) => {
+                bookHtml += `<div class="chapter">
+                    <h3>Chapter ${cIdx + 1}<br>${chapter.displayTitle || chapter.title}</h3>`;
+
+                chapter.scenes?.forEach((scene, sIdx) => {
+                    if (sIdx > 0) bookHtml += '<div class="scene-break"></div>';
+
+                    // SAFE CONTENT PROCESSING
+                    // 1. Get raw content or empty string
+                    let content = scene.content || '';
+
+                    // 2. Remove suggestion blocks [S1:...]
+                    content = content.replace(/\[S\d+:.*?\]/g, '');
+
+                    // 3. Remove dangerous tags but KEEP internal HTML structure (b, i, em, strong, span)
+                    content = content.replace(/<\/?(script|style|link|meta).*?>/gi, '');
+
+                    // 4. Flatten DIVs? No, some editors use divs for paragraphs. 
+                    // Let's replace <div> with <p> if they don't have classes, or just leave them.
+                    // Actually, the main issue was likely empty content strings or regex failures.
+                    // Let's ensure we have paragraphs.
+
+                    // If content has NO tags, wrap in <p>
+                    if (!content.trim().startsWith('<')) {
+                        content = content.split('\n').filter(l => l.trim()).map(l => `<p>${l}</p>`).join('');
+                    }
+                    // If content has <div> but no <p>, convert divs to p? 
+                    // Safest is to just dump the content. The browser print engine handles text nodes reasonably well.
+                    // But to enforce indent, we usually need <p>.
+
+                    // Quick fix for "text nodes without p":
+                    // If the content is just text, wrap it.
+
+                    bookHtml += `<div class="scene">${content}</div>`;
+                });
+
+                // Aesthetic line at the END of the chapter
+                bookHtml += `<hr class="aesthetic-line"></div>`;
+            });
+        });
+
+        bookHtml += '</body></html>';
+
+        // Open print window
+        const printWindow = window.open('', '_blank');
+        printWindow.document.write(bookHtml);
+        printWindow.document.close();
+
+        // Wait for fonts to load, then print
+        setTimeout(() => {
+            printWindow.print();
+        }, 500);
+    }
+
 }

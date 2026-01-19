@@ -197,21 +197,63 @@ export class Toolbar {
                 e.stopPropagation();
                 const color = swatch.dataset.color;
 
-                this.currentColor = color;
-                this.app.state.settings.currentTextColor = color;
+                this.currentColor = color === 'auto' ? '#000000' : color;
+                this.app.state.settings.currentTextColor = this.currentColor;
                 this.app.save();
 
-                colorBtn.querySelector('.color-bar').style.background = color;
+                colorBtn.querySelector('.color-bar').style.background = this.currentColor;
                 dropdown.classList.remove('open');
 
                 this.restoreSelection();
-                if (this.hasSelection()) {
-                    // Apply to selection
-                    document.execCommand('foreColor', false, color);
+
+                if (color === 'auto') {
+                    if (this.hasSelection()) {
+                        // TARGETED REMOVAL: 'removeFormat' kills bold/italic.
+                        // We use the "Marker Trick":
+                        // 1. Apply a unique color (#fe1234)
+                        document.execCommand('foreColor', false, '#fe1234');
+
+                        // 2. Find and strip it
+                        const editor = document.getElementById('editor-content');
+
+                        // Handle <font color="#fe1234">
+                        const fonts = editor.querySelectorAll('font[color="#fe1234"]');
+                        fonts.forEach(f => {
+                            f.removeAttribute('color');
+                            // If no other attributes, unwrap (optional, but cleaner)
+                            if (!f.attributes.length) {
+                                const parent = f.parentNode;
+                                while (f.firstChild) parent.insertBefore(f.firstChild, f);
+                                parent.removeChild(f);
+                            }
+                        });
+
+                        // Handle <span style="color: rgb(254, 18, 52)"> (approx)
+                        // Browsers might convert hex to rgb. #fe1234 = rgb(254, 18, 52)
+                        const spans = editor.querySelectorAll('span');
+                        spans.forEach(s => {
+                            if (s.style.color === 'rgb(254, 18, 52)' || s.style.color === '#fe1234') {
+                                s.style.color = '';
+                                if (!s.getAttribute('style') && !s.className) {
+                                    // Unwrap if empty
+                                    const parent = s.parentNode;
+                                    while (s.firstChild) parent.insertBefore(s.firstChild, s);
+                                    parent.removeChild(s);
+                                }
+                            }
+                        });
+                    } else {
+                        // New typing
+                        this.pendingColor = null;
+                        this.insertStyledCursor(); // Will use null -> default color
+                    }
                 } else {
-                    // Set pending style for new typing
-                    this.pendingColor = color;
-                    this.insertStyledCursor();
+                    if (this.hasSelection()) {
+                        document.execCommand('foreColor', false, color);
+                    } else {
+                        this.pendingColor = color;
+                        this.insertStyledCursor();
+                    }
                 }
             });
         });
@@ -219,6 +261,7 @@ export class Toolbar {
 
     generateColorSwatches() {
         const colors = [
+            'auto', // Special value for default/reset
             '#000000', '#434343', '#666666', '#999999', '#b7b7b7', '#cccccc', '#d9d9d9', '#ffffff',
             '#ff0000', '#ff9900', '#ffff00', '#00ff00', '#00ffff', '#0000ff', '#9900ff', '#ff00ff',
             '#cc0000', '#e69138', '#f1c232', '#6aa84f', '#45818e', '#3c78d8', '#674ea7', '#a64d79',
@@ -226,9 +269,29 @@ export class Toolbar {
             '#660000', '#783f04', '#7f6000', '#274e13', '#0c343d', '#1c4587', '#20124d', '#4c1130'
         ];
 
-        return colors.map(color =>
-            `<div class="color-picker-swatch" data-color="${color}" style="background: ${color};"></div>`
-        ).join('');
+        return colors.map(color => {
+            let extraClass = '';
+            let title = color;
+            let style = `background: ${color};`;
+
+            if (color === 'auto') {
+                extraClass = ' highlight-auto';
+                title = 'Auto (Adapts to Theme)';
+                // diagonal line pattern to represent "transparent/auto"
+                style = `background: repeating-linear-gradient(45deg, #fff, #fff 5px, #eee 5px, #eee 10px); color: black; display: flex; align-items: center; justify-content: center; font-size: 10px; font-weight: bold;`;
+            } else if (color === '#000000') {
+                extraClass = ' highlight-black';
+                title = 'Black (Static)';
+            } else if (color === '#ffffff') {
+                extraClass = ' highlight-white';
+                title = 'White (Static)';
+            }
+
+            // If auto, render "A" text inside, else just color
+            const content = color === 'auto' ? 'A' : '';
+
+            return `<div class="color-picker-swatch${extraClass}" data-color="${color}" title="${title}" style="${style}">${content}</div>`;
+        }).join('');
     }
 
     toggleFormat(format) {
