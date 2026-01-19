@@ -9,24 +9,70 @@ export class AIService {
         this.baseUrl = app.state.settings.aiProvider || '';
         this.apiKey = app.state.settings.aiApiKey || '';
         this.model = app.state.settings.aiModel || '';
+
+        // Alive Editor API (secondary, faster model)
+        this.aliveBaseUrl = app.state.settings.aliveProvider || '';
+        this.aliveApiKey = app.state.settings.aliveApiKey || '';
+        this.aliveModel = app.state.settings.aliveModel || '';
+
         this.isStreaming = false;
         this.abortController = null;
     }
 
-    /**
-     * Update configuration from settings
-     */
     updateConfig() {
         this.baseUrl = this.app.state.settings.aiProvider || '';
         this.apiKey = this.app.state.settings.aiApiKey || '';
         this.model = this.app.state.settings.aiModel || '';
+        this.aliveBaseUrl = this.app.state.settings.aliveProvider || '';
+        this.aliveApiKey = this.app.state.settings.aliveApiKey || '';
+        this.aliveModel = this.app.state.settings.aliveModel || '';
     }
 
-    /**
-     * Check if API is configured
-     */
     isConfigured() {
         return this.apiKey && this.apiKey.trim().length > 0;
+    }
+
+    hasAliveModel() {
+        return this.aliveModel && this.aliveModel.trim().length > 0;
+    }
+
+    async sendAliveRequest(prompt, systemPrompt = '') {
+        // Use Alive model if set, otherwise fall back to main model
+        // For URL and key, use Alive if set, otherwise use main
+        const baseUrl = (this.aliveBaseUrl && this.aliveBaseUrl.trim()) || this.baseUrl;
+        const apiKey = (this.aliveApiKey && this.aliveApiKey.trim()) || this.apiKey;
+        const model = this.hasAliveModel() ? this.aliveModel : this.model;
+
+        if (!apiKey || !model) {
+            throw new Error('No API configured for Alive Editor');
+        }
+
+        const messages = [];
+        if (systemPrompt) messages.push({ role: 'system', content: systemPrompt });
+        messages.push({ role: 'user', content: prompt });
+
+        const response = await fetch(`${baseUrl}/chat/completions`, {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${apiKey}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                model: model,
+                messages: messages,
+                temperature: 0.7
+            })
+        });
+
+        if (!response.ok) {
+            const error = await response.text();
+            throw new Error(`Alive API error: ${response.status} - ${error}`);
+        }
+
+        const data = await response.json();
+        console.log('Alive API raw response:', data);
+        const content = data.choices?.[0]?.message?.content || '';
+        return content.trim();
     }
 
     /**

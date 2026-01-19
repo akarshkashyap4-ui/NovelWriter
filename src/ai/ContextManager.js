@@ -4,6 +4,7 @@
  * Provides the AI with awareness of the manuscript structure
  * and retrieves relevant content based on the current context
  */
+import { stripContent } from '../utils/TextUtils.js';
 
 export class ContextManager {
     constructor(app) {
@@ -29,7 +30,7 @@ export class ContextManager {
             part.chapters.forEach((chapter, cIdx) => {
                 const sceneCount = chapter.scenes?.length || 0;
                 const wordCount = chapter.scenes?.reduce((sum, s) => {
-                    const text = s.content?.replace(/<[^>]*>/g, '') || '';
+                    const text = stripContent(s.content);
                     return sum + text.trim().split(/\s+/).filter(w => w).length;
                 }, 0) || 0;
 
@@ -105,7 +106,7 @@ export class ContextManager {
             chapter.scenes?.forEach(s => {
                 content += `## ${s.title}\n`;
                 // Add content
-                content += (s.content?.replace(/<[^>]*>/g, '') || '') + '\n\n';
+                content += stripContent(s.content) + '\n\n';
 
                 // Collect suggestions if present
                 if (s.suggestions && s.suggestions.items && s.suggestions.items.length > 0) {
@@ -143,26 +144,20 @@ export class ContextManager {
                 content += `## ${chapter.displayTitle || chapter.title}\n\n`;
                 chapter.scenes?.forEach(s => {
                     content += `### ${s.title}\n`;
-                    content += (s.content?.replace(/<[^>]*>/g, '') || '') + '\n\n';
+                    // Strip HTML tags and inline suggestions
+                    content += stripContent(s.content) + '\n\n';
                 });
             });
         });
 
         const wordCount = content.trim().split(/\s+/).filter(w => w).length;
 
-        // If the manuscript is too large, provide a truncated version
-        const MAX_WORDS = 5000;
-        if (wordCount > MAX_WORDS) {
-            const words = content.split(/\s+/);
-            content = words.slice(0, MAX_WORDS).join(' ') + '\n\n[... content truncated for context limits ...]';
-        }
-
         return {
             type: 'book',
             title: this.app.state.metadata.title,
             content: content,
             wordCount: wordCount,
-            truncated: wordCount > MAX_WORDS
+            truncated: false
         };
     }
 
@@ -211,7 +206,7 @@ export class ContextManager {
                 content += `## ${chapter.displayTitle || chapter.title}\n\n`;
                 chapter.scenes?.forEach(s => {
                     content += `### ${s.title}\n`;
-                    content += (s.content?.replace(/<[^>]*>/g, '') || '') + '\n\n';
+                    content += stripContent(s.content) + '\n\n';
                 });
             });
             content += '---\n\n';
@@ -230,7 +225,7 @@ export class ContextManager {
                 let content = `# ${chapter.displayTitle || chapter.title}\n\n`;
                 chapter.scenes?.forEach(scene => {
                     content += `## ${scene.title}\n`;
-                    content += (scene.content?.replace(/<[^>]*>/g, '') || '') + '\n\n';
+                    content += stripContent(scene.content) + '\n\n';
                 });
                 return content;
             }
@@ -484,7 +479,7 @@ export class ContextManager {
                 totalChapters++;
                 chapter.scenes?.forEach(scene => {
                     totalScenes++;
-                    const text = scene.content?.replace(/<[^>]*>/g, '') || '';
+                    const text = stripContent(scene.content);
                     totalWords += text.trim().split(/\s+/).filter(w => w).length;
                 });
             });

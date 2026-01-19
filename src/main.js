@@ -11,6 +11,7 @@ import { AIService } from './ai/AIService.js';
 import { APIConfig } from './ai/APIConfig.js';
 import { AgentPanel } from './ai/AgentPanel.js';
 import { StoryPulse } from './analytics/StoryPulse.js';
+import { AliveEditor } from './alive/AliveEditor.js';
 
 class NovelWriterApp {
   constructor() {
@@ -30,6 +31,7 @@ class NovelWriterApp {
     this.apiConfig = new APIConfig(this);
     this.agentPanel = new AgentPanel(this);
     this.storyPulse = new StoryPulse(this);
+    this.aliveEditor = new AliveEditor(this);
 
     this.bindEvents();
     this.bindSelectionEvents();
@@ -1074,6 +1076,25 @@ class NovelWriterApp {
       console.error('Thesaurus search failed:', error);
       resultsContainer.innerHTML = '<p class="thesaurus-error">Search failed. Please check your internet connection.</p>';
     }
+  }
+
+  /**
+   * Get the currently active scene being edited
+   */
+  getCurrentScene() {
+    if (!this.currentContext || this.currentContext.type !== 'scene') return null;
+    const { partId, chapterId, sceneId } = this.currentContext;
+    const part = this.state.manuscript.parts.find(p => p.id === partId);
+    const chapter = part?.chapters.find(c => c.id === chapterId);
+    return chapter?.scenes.find(s => s.id === sceneId) || null;
+  }
+
+  /**
+   * Get the currently active part (containing the current scene)
+   */
+  getCurrentPart() {
+    if (!this.currentContext) return null;
+    return this.state.manuscript.parts.find(p => p.id === this.currentContext.partId) || null;
   }
 }
 

@@ -8,7 +8,7 @@ export class APIConfig {
         this.app = app;
         this.modal = document.getElementById('api-config-modal');
 
-        // Form elements
+        // Main API form elements
         this.aiProvider = document.getElementById('setting-ai-provider');
         this.aiApiKey = document.getElementById('setting-ai-apikey');
         this.aiModel = document.getElementById('setting-ai-model');
@@ -17,6 +17,11 @@ export class APIConfig {
         this.toggleApiKeyBtn = document.getElementById('toggle-apikey-visibility');
         this.saveBtn = document.getElementById('save-api-config');
         this.closeBtn = document.getElementById('close-api-config');
+
+        // Alive Editor API form elements
+        this.aliveProvider = document.getElementById('setting-alive-provider');
+        this.aliveApiKey = document.getElementById('setting-alive-apikey');
+        this.aliveModel = document.getElementById('setting-alive-model');
 
         this.bindEvents();
     }
@@ -76,6 +81,17 @@ export class APIConfig {
             this.aiModel.value = state.settings.aiModel || '';
         }
 
+        // Load Alive Editor settings
+        if (this.aliveProvider) {
+            this.aliveProvider.value = state.settings.aliveProvider || '';
+        }
+        if (this.aliveApiKey) {
+            this.aliveApiKey.value = state.settings.aliveApiKey || '';
+        }
+        if (this.aliveModel) {
+            this.aliveModel.value = state.settings.aliveModel || '';
+        }
+
         // Reset connection status
         if (this.connectionStatus) {
             this.connectionStatus.textContent = '';
@@ -101,6 +117,17 @@ export class APIConfig {
         }
         if (this.aiModel) {
             state.settings.aiModel = this.aiModel.value.trim();
+        }
+
+        // Update Alive Editor settings
+        if (this.aliveProvider) {
+            state.settings.aliveProvider = this.aliveProvider.value.trim();
+        }
+        if (this.aliveApiKey) {
+            state.settings.aliveApiKey = this.aliveApiKey.value.trim();
+        }
+        if (this.aliveModel) {
+            state.settings.aliveModel = this.aliveModel.value.trim();
         }
 
         // Update AIService

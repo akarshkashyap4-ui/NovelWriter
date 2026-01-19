@@ -167,7 +167,22 @@
         <div class="status-bar">
           <span class="status-item" id="word-count">0 words</span>
           <span class="status-divider">|</span>
+          <span class="status-item mood-indicator" id="mood-indicator">
+            <span class="mood-dot"></span>
+            <span class="mood-label">--</span>
+          </span>
+          <span class="status-divider">|</span>
           <span class="status-item" id="save-status">Saved</span>
+        </div>
+
+        <!-- Alive Editor Panel (Bottom Right) -->
+        <div class="alive-panel" id="alive-panel">
+          <div class="alive-header">Alive</div>
+        </div>
+
+        <!-- Alive Mood Popup (appears at cursor) -->
+        <div class="alive-popup" id="alive-popup">
+          <span class="alive-popup-content"></span>
         </div>
       </section>
 
@@ -272,6 +287,36 @@
                 <option value="full">Full Manuscript (High Cost)</option>
               </select>
             </div>
+
+            <h3>Alive Editor</h3>
+            <p class="settings-description">Real-time AI awareness. Triggers after X letters typed.</p>
+            <div class="setting-row">
+              <label>🎭 Mood Indicator</label>
+              <div class="setting-inline">
+                <input type="checkbox" id="setting-alive-mood-enabled" checked />
+                <input type="number" id="setting-alive-mood-trigger" value="50" min="10" max="2000"
+                  style="width: 70px;" />
+                <span class="setting-hint">letters</span>
+              </div>
+            </div>
+            <div class="setting-row">
+              <label>💬 Agent Remarks</label>
+              <div class="setting-inline">
+                <input type="checkbox" id="setting-alive-remarks-enabled" />
+                <input type="number" id="setting-alive-remarks-trigger" value="300" min="10" max="2000"
+                  style="width: 70px;" />
+                <span class="setting-hint">letters</span>
+              </div>
+            </div>
+            <div class="setting-row">
+              <label>👥 Echo Chamber</label>
+              <div class="setting-inline">
+                <input type="checkbox" id="setting-alive-echo-enabled" />
+                <input type="number" id="setting-alive-echo-trigger" value="500" min="10" max="2000"
+                  style="width: 70px;" />
+                <span class="setting-hint">letters</span>
+              </div>
+            </div>
           </div>
         </div>
         <div class="modal-footer">
@@ -321,6 +366,23 @@
             <div class="setting-row setting-row-actions">
               <button type="button" class="btn btn-secondary" id="test-ai-connection">Test Connection</button>
               <span id="ai-connection-status"></span>
+            </div>
+          </div>
+
+          <div class="settings-section">
+            <h3>Alive Editor Model (Optional)</h3>
+            <p class="settings-description">Faster model for real-time features. Leave blank to use main model.</p>
+            <div class="setting-row">
+              <label>Provider URL</label>
+              <input type="text" id="setting-alive-provider" placeholder="Same as above if blank" />
+            </div>
+            <div class="setting-row">
+              <label>API Key</label>
+              <input type="password" id="setting-alive-apikey" placeholder="Same as above if blank" />
+            </div>
+            <div class="setting-row">
+              <label>Model ID</label>
+              <input type="text" id="setting-alive-model" placeholder="e.g., gpt-4o-mini, gemini-flash" />
             </div>
           </div>
         </div>

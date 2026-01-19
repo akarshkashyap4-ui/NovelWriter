@@ -1,4 +1,6 @@
 
+import { stripContent } from '../utils/TextUtils.js';
+
 export class StoryPulse {
     constructor(app) {
         this.app = app;
@@ -76,7 +78,9 @@ export class StoryPulse {
                 const chapterLabel = `${chapter.title} (Part ${pIdx + 1})`;
                 chapters.push(chapterLabel);
 
-                const content = chapter.scenes?.map(s => s.content || '').join('\n\n') || '';
+                const content = chapter.scenes?.map(s => {
+                    return stripContent(s.content);
+                }).join('\n\n') || '';
                 manuscriptText += `\n\n=== ${chapterLabel} ===\n\n${content}`;
             });
         });

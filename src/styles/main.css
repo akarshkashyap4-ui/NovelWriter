@@ -1149,6 +1149,181 @@ body {
 }
 
 /* ========================================
+   Alive Editor Panel
+   ======================================== */
+.alive-panel {
+  position: absolute;
+  bottom: 50px;
+  right: 20px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-lg);
+  min-width: 160px;
+  z-index: 50;
+  overflow: hidden;
+}
+
+.alive-header {
+  background: var(--bg-tertiary);
+  padding: 0.4rem 0.75rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+  border-bottom: 1px solid var(--border-color);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.alive-feature {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.4rem 0.75rem;
+  font-size: 0.8rem;
+  position: relative;
+  overflow: hidden;
+}
+
+.alive-feature.disabled {
+  opacity: 0.4;
+}
+
+.alive-feature.pending {
+  background: rgba(52, 152, 219, 0.1);
+}
+
+.alive-icon {
+  font-size: 1rem;
+}
+
+.alive-label {
+  flex: 1;
+  color: var(--text-primary);
+}
+
+.alive-counter {
+  font-family: monospace;
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}
+
+.alive-progress {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  height: 2px;
+  background: var(--accent-primary);
+  transition: width 0.1s ease;
+}
+
+.alive-spinner {
+  animation: alive-spin 1s linear infinite;
+  font-size: 0.8rem;
+}
+
+@keyframes alive-spin {
+  from {
+    transform: rotate(0deg);
+  }
+
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Alive Mood Popup */
+.alive-popup {
+  position: fixed;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  padding: 0.3rem 0.5rem;
+  font-size: 0.7rem;
+  z-index: 1000;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.4s ease;
+  max-width: 150px;
+}
+
+.alive-popup.visible {
+  opacity: 0.75;
+  pointer-events: none;
+}
+
+.alive-popup-content {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: var(--text-primary);
+}
+
+.alive-popup.mood-tense {
+  border-left: 3px solid #C0392B;
+}
+
+.alive-popup.mood-romantic {
+  border-left: 3px solid #E91E63;
+}
+
+.alive-popup.mood-melancholic {
+  border-left: 3px solid #5D6D7E;
+}
+
+.alive-popup.mood-action {
+  border-left: 3px solid #F39C12;
+}
+
+.alive-popup.mood-calm {
+  border-left: 3px solid #27AE60;
+}
+
+.alive-popup.mood-mysterious {
+  border-left: 3px solid #8E44AD;
+}
+
+.alive-popup.mood-humorous {
+  border-left: 3px solid #3498DB;
+}
+
+.alive-popup.mood-undetermined {
+  border-left: 3px solid #95A5A6;
+}
+
+/* Remarks Popup Styling */
+.alive-popup.remarks-popup {
+  border-left: 3px solid #9B59B6;
+  max-width: 250px;
+  font-style: italic;
+}
+
+/* Mood Indicator in Status Bar */
+.mood-indicator {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.2rem 0.5rem;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  transition: border-color 0.3s;
+}
+
+.mood-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--text-muted);
+  transition: background 0.3s;
+}
+
+.mood-label {
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+}
+
+/* ========================================
    Status Bar
    ======================================== */
 .status-bar {

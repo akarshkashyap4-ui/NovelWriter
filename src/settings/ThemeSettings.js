@@ -14,6 +14,14 @@ export class Settings {
         this.contextStrategySelect = document.getElementById('setting-ai-context-strategy');
         this.saveBtn = document.getElementById('save-settings');
 
+        // Alive Editor settings
+        this.aliveMoodEnabled = document.getElementById('setting-alive-mood-enabled');
+        this.aliveMoodTrigger = document.getElementById('setting-alive-mood-trigger');
+        this.aliveRemarksEnabled = document.getElementById('setting-alive-remarks-enabled');
+        this.aliveRemarksTrigger = document.getElementById('setting-alive-remarks-trigger');
+        this.aliveEchoEnabled = document.getElementById('setting-alive-echo-enabled');
+        this.aliveEchoTrigger = document.getElementById('setting-alive-echo-trigger');
+
         this.bindEvents();
     }
 
@@ -22,7 +30,6 @@ export class Settings {
             this.saveSettings();
         });
 
-        // Close on backdrop click
         const backdrop = this.modal.querySelector('.modal-backdrop');
         if (backdrop) {
             backdrop.addEventListener('click', () => {
@@ -35,8 +42,17 @@ export class Settings {
         const state = this.app.state;
         this.themeSelect.value = state.settings.theme;
         this.fontSelect.value = state.settings.font;
-        // Default to 'smart' if not set
         this.contextStrategySelect.value = state.settings.contextStrategy || 'smart';
+
+        // Load Alive Editor settings
+        const alive = state.settings.alive || {};
+        if (this.aliveMoodEnabled) this.aliveMoodEnabled.checked = alive.moodEnabled !== false;
+        if (this.aliveMoodTrigger) this.aliveMoodTrigger.value = alive.moodTrigger || 50;
+        if (this.aliveRemarksEnabled) this.aliveRemarksEnabled.checked = alive.remarksEnabled || false;
+        if (this.aliveRemarksTrigger) this.aliveRemarksTrigger.value = alive.remarksTrigger || 300;
+        if (this.aliveEchoEnabled) this.aliveEchoEnabled.checked = alive.echoEnabled || false;
+        if (this.aliveEchoTrigger) this.aliveEchoTrigger.value = alive.echoTrigger || 500;
+
         this.modal.classList.add('open');
     }
 
@@ -59,6 +75,21 @@ export class Settings {
 
         // Update context strategy
         state.settings.contextStrategy = this.contextStrategySelect.value;
+
+        // Update Alive Editor settings
+        state.settings.alive = {
+            moodEnabled: this.aliveMoodEnabled?.checked ?? true,
+            moodTrigger: parseInt(this.aliveMoodTrigger?.value) || 50,
+            remarksEnabled: this.aliveRemarksEnabled?.checked || false,
+            remarksTrigger: parseInt(this.aliveRemarksTrigger?.value) || 300,
+            echoEnabled: this.aliveEchoEnabled?.checked || false,
+            echoTrigger: parseInt(this.aliveEchoTrigger?.value) || 500
+        };
+
+        // Update AliveEditor if it exists
+        if (this.app.aliveEditor) {
+            this.app.aliveEditor.updateSettings(state.settings.alive);
+        }
 
         // Apply font to editor
         const editor = document.getElementById('editor-content');
