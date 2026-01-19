@@ -227,6 +227,7 @@ export class AgentPanel {
             const includePlotMacro = /\{plot\}/i.test(cleanInput);
             const includeNotesMacro = /\{notes?\}/i.test(cleanInput);
             const includeAnalysisMacro = /\{analysis\}/i.test(cleanInput);
+            const includeWorldMacro = /\{world\}/i.test(cleanInput);
 
             // Remove macros from the message displayed to AI
             const cleanedInput = cleanInput
@@ -234,6 +235,7 @@ export class AgentPanel {
                 .replace(/\{plot\}/gi, '')
                 .replace(/\{notes?\}/gi, '')
                 .replace(/\{analysis\}/gi, '')
+                .replace(/\{world\}/gi, '')
                 .trim();
 
             // Build context (characters always included; plot, notes, analysis only with macros)
@@ -243,7 +245,8 @@ export class AgentPanel {
                 includeCharacters: true,
                 includePlot: includePlotMacro,
                 includeNotes: includeNotesMacro,
-                includeAnalysis: includeAnalysisMacro
+                includeAnalysis: includeAnalysisMacro,
+                includeWorld: includeWorldMacro
             });
 
             // Get manuscript summary for system prompt

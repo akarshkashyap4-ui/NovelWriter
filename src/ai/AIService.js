@@ -71,6 +71,17 @@ export class AIService {
             throw new Error('API key not configured. Please add your API key in Settings.');
         }
 
+        const requestMessages = [...messages];
+
+        // Prepend system prompt if provided
+        if (options.systemPrompt) {
+            requestMessages.unshift({ role: 'system', content: options.systemPrompt });
+        } else if (options.mode) {
+            // Or use mode-based default if no explicit system prompt
+            const modeSystemPrompt = this.buildSystemPrompt(options.mode, options.context || {});
+            requestMessages.unshift({ role: 'system', content: modeSystemPrompt });
+        }
+
         const response = await fetch(`${this.baseUrl}/chat/completions`, {
             method: 'POST',
             headers: {
@@ -79,7 +90,7 @@ export class AIService {
             },
             body: JSON.stringify({
                 model: options.model || this.model,
-                messages: messages,
+                messages: requestMessages,
                 temperature: options.temperature || 0.7,
                 max_tokens: options.maxTokens || 4096,
                 ...options.extra

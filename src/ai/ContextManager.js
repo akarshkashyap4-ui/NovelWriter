@@ -351,6 +351,7 @@ export class ContextManager {
             includePlot = false,
             includeNotes = false,
             includeAnalysis = false,
+            includeWorld = false,
             customChapterId = null
         } = options;
 
@@ -455,8 +456,13 @@ export class ContextManager {
             context += this.getStoryNotes() + '\n---\n\n';
         }
 
+
         if (includeAnalysis) {
             context += this.getAnalysisContext() + '\n---\n\n';
+        }
+
+        if (includeWorld) {
+            context += this.getWorldContext() + '\n---\n\n';
         }
 
         return context;
@@ -561,5 +567,31 @@ export class ContextManager {
         });
 
         return context;
+    }
+    /**
+     * Get world info context (triggered by {world} macro)
+     */
+    getWorldContext() {
+        const worldInfo = this.app.state.worldInfo || { parts: {} };
+        const parts = this.app.state.manuscript.parts;
+        let content = '# EXTRACTED WORLD INFO\n';
+        content += 'The following information has been extracted from the manuscript by the analysis system:\n\n';
+
+        let hasData = false;
+
+        parts.forEach(part => {
+            const info = worldInfo.parts?.[part.id];
+            if (info && info.rawText) {
+                hasData = true;
+                content += `## From ${part.displayTitle || part.title}\n`;
+                content += info.rawText + '\n\n';
+            }
+        });
+
+        if (!hasData) {
+            return '# EXTRACTED WORLD INFO\n(No world info extracted yet. Use "Extract Details" on a Part to populate this.)\n';
+        }
+
+        return content;
     }
 }

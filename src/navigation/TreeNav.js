@@ -446,6 +446,9 @@ export class TreeNav {
             case 'notes':
                 items = [{ label: 'Add Note', onClick: () => this.addNote() }];
                 break;
+            case 'worldinfo':
+                // No menu for the section header itself
+                break;
         }
         if (items.length) this.contextMenu.show(x, y, items);
     }
@@ -475,6 +478,7 @@ export class TreeNav {
                     { label: hasSummary ? '🔄 Regenerate Summary' : '📝 Generate Summary', onClick: () => this.generatePartSummary(id) },
                     { label: hasAnalysis ? '🔄 Regenerate Analysis' : '🔍 Agent Analysis', onClick: () => this.generatePartAnalysis(id) },
                     { label: hasWorldInfo ? '🔄 Update Details' : '📖 Extract Details', onClick: () => this.generateWorldInfo(id, hasWorldInfo) },
+                    ...(hasWorldInfo ? [{ label: '🗑️ Delete World Info', onClick: () => this.deleteWorldInfo(id) }] : []),
                     { divider: true },
                     { label: 'Rename', onClick: () => this.rename('part', id) },
                     { label: 'Delete', onClick: () => this.deletePart(id) }
@@ -549,6 +553,12 @@ export class TreeNav {
                 items = [
                     { label: 'Rename', onClick: () => this.renameNote(id) },
                     { label: 'Delete', onClick: () => this.deleteNote(id) }
+                ];
+                break;
+            case 'worldinfo':
+                items = [
+                    { label: '🔄 Update Details', onClick: () => this.generateWorldInfo(id, true) },
+                    { label: '🗑️ Delete World Info', onClick: () => this.deleteWorldInfo(id) }
                 ];
                 break;
         }
@@ -1860,33 +1870,46 @@ Return your analysis as a JSON object following the exact structure specified.`;
 
         // Build prompt - PLAIN TEXT format (no JSON)
         const systemPrompt = `You are a literary analyst extracting world information from a novel manuscript.
-Your job is to identify key details the writer should track for consistency.
 
-Return your analysis in PLAIN TEXT using EXACTLY these section headers:
+STOP. READ THIS FIRST:
+1. Do NOT use markdown headers (like ### Characters).
+2. Do NOT use bolding (**text**) for the section headers.
+3. You MUST use EXACTLY the following section headers with simple bullet points.
+
+TEMPLATE TO FOLLOW:
 
 === ESTABLISHED FACTS ===
-(List important facts that must stay consistent - backstory, rules, truths)
+- Fact 1
+- Fact 2
 
 === KEY PLOT POINTS ===
-(List major events that happened in this part)
+- Plot point 1
+- Plot point 2
 
 === IMPORTANT NAMES ===
-(List new characters, places, items introduced with brief context)
+- Name 1: Context
+- Name 2: Context
 
 === TIMELINE ===
-(List sequence of events with relative timing)
+- Event 1: Time
+- Event 2: Time
 
 === CHARACTER RELATIONSHIPS ===
-(List how characters relate to each other at the end of this part)
+- A and B: Relationship status
 
 === LOCATIONS ===
-(List places where scenes occur with brief descriptions)
+- Place 1: Description
 
-Use bullet points (- ) for each item. Be concise. Only include what's actually in the text.`;
+Any other format will fail. Return ONLY the text matching this template.`;
 
-        let userPrompt = `Extract world information from PART: "${partTitle}"
+        let userPrompt = `Extract world information ONLY from PART: "${partTitle}"
 
-Full Manuscript:
+INSTRUCTIONS:
+1. FOCUS ONLY on the events and details within "${partTitle}".
+2. DO NOT include plot points or details that happen *outside* this part.
+3. IGNORE any text labeled as "Suggestions", "Feedback", or content inside [brackets] or <!-- comments -->. These are not part of the story.
+
+Full Manuscript (for context only):
 ${manuscriptContent}`;
 
         if (isUpdate && previousInfo) {
@@ -1907,15 +1930,16 @@ ${manuscriptContent}`;
             console.log('-----------------------');
 
             const parseSection = (text, sectionName) => {
-                const regex = new RegExp(`===\\s*${sectionName}\\s*===([\\s\\S]*?)(?====|$)`, 'i');
+                // Regex matches === HEADER === (content) until next === or end of string
+                const regex = new RegExp(`===\\s*${sectionName}\\s*===\\s*([\\s\\S]*?)(?=\\n===|$)`, 'i');
                 const match = text.match(regex);
                 if (!match) return [];
 
                 // Extract lines, remove empty ones, and clean up bullets
                 const lines = match[1].split('\n')
                     .map(line => line.trim())
-                    .filter(line => line.length > 0 && !line.startsWith('(')) // Ignore empty lines and parenthetical instructions
-                    .map(line => line.replace(/^[-•*]\s*/, '')); // Remove bullet points if present
+                    .filter(line => line.length > 0 && !line.startsWith('('))
+                    .map(line => line.replace(/^[-•*]\s*/, '').replace(/^\*\*(.*?)\*\*[:\s]*/, '$1: ')); // Clean bullets and bolding
 
                 return lines;
             };
@@ -2033,6 +2057,23 @@ ${manuscriptContent}`;
                 </div>
             </div>
         `;
+    }
+
+    deleteWorldInfo(partId) {
+        if (!this.app.state.worldInfo?.parts?.[partId]) return;
+
+        delete this.app.state.worldInfo.parts[partId];
+        this.app.save();
+        this.render();
+
+        // If currently viewing this world info, clear the editor
+        const currentView = document.querySelector('.world-info-header');
+        if (currentView && currentView.textContent.includes('World Info')) {
+            const editorContent = document.getElementById('editor-content');
+            if (editorContent) {
+                editorContent.innerHTML = '<div class="editor-empty-state">Select an item from the sidebar</div>';
+            }
+        }
     }
 
 }
