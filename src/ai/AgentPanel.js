@@ -225,21 +225,24 @@ export class AgentPanel {
             const includeCharactersMacro = /\{characters?\}/i.test(cleanInput);
             const includePlotMacro = /\{plot\}/i.test(cleanInput);
             const includeNotesMacro = /\{notes?\}/i.test(cleanInput);
+            const includeAnalysisMacro = /\{analysis\}/i.test(cleanInput);
 
             // Remove macros from the message displayed to AI
             const cleanedInput = cleanInput
                 .replace(/\{characters?\}/gi, '')
                 .replace(/\{plot\}/gi, '')
                 .replace(/\{notes?\}/gi, '')
+                .replace(/\{analysis\}/gi, '')
                 .trim();
 
-            // Build context (characters always included; plot and notes only with macros)
+            // Build context (characters always included; plot, notes, analysis only with macros)
             const context = this.contextManager.buildContext({
                 includeStructure: true,
                 includeCurrentScene: true,
                 includeCharacters: true,
                 includePlot: includePlotMacro,
-                includeNotes: includeNotesMacro
+                includeNotes: includeNotesMacro,
+                includeAnalysis: includeAnalysisMacro
             });
 
             // Get manuscript summary for system prompt

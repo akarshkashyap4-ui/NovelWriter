@@ -164,6 +164,8 @@ export class Storage {
       currentView: migrated.currentView || defaults.currentView,
       // Part Summaries
       summaries: { ...defaults.summaries, ...migrated.summaries },
+      // Agent Analysis
+      analysis: { ...defaults.analysis, ...migrated.analysis },
       // AI Conversations
       conversations: migrated.conversations || defaults.conversations,
       activeConversationId: migrated.activeConversationId || defaults.activeConversationId
@@ -239,6 +241,10 @@ export class Storage {
       // Part Summaries (for token-efficient context)
       summaries: {
         parts: {} // { partId: { content: "...", wordCount: 123, generatedAt: "...", targetWords: 500 } }
+      },
+      // Agent Analysis (Phase 2)
+      analysis: {
+        parts: {}
       },
       // AI Agent Conversations (per-project)
       conversations: [],

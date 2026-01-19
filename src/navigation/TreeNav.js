@@ -54,6 +54,7 @@ export class TreeNav {
         this.container.innerHTML = `
       ${this.renderSection('MANUSCRIPT', 'manuscript', this.renderManuscript())}
       ${this.renderSection('SUMMARIES', 'summaries', this.renderSummaries())}
+      ${this.renderSection('ANALYSIS', 'analysis', this.renderAnalysis())}
       ${this.renderSection('PLOT', 'plot', this.renderPlot(), true)}
       ${this.renderSection('CHARACTERS', 'characters', this.renderCharacters(), true)}
       ${this.renderSection('STORY NOTES', 'notes', this.renderNotes(), true)}
@@ -337,6 +338,33 @@ export class TreeNav {
         ).join('');
     }
 
+    renderAnalysis() {
+        const analyses = this.app.state.analysis?.parts || {};
+        const parts = this.app.state.manuscript.parts || [];
+
+        // Get analyses that exist, in part order
+        const analysisItems = parts
+            .filter(part => analyses[part.id])
+            .map(part => ({
+                partId: part.id,
+                partTitle: part.displayTitle || part.title
+            }));
+
+        if (analysisItems.length === 0) {
+            return '<div class="tree-item-empty">No analyses yet. Right-click a Part to generate.</div>';
+        }
+
+        return analysisItems.map(item =>
+            this.renderItem({
+                section: 'analysis',
+                id: `analysis-${item.partId}`,
+                type: 'analysis',
+                label: `${item.partTitle} Analysis`,
+                icon: 'analysis'
+            })
+        ).join('');
+    }
+
     renderItem({ section, id, type, label, icon, depth = 0, parent = null, grandparent = null, draggable = false, collapsible = false, isCollapsed = false }) {
         const icons = {
             book: '<path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/>',
@@ -347,7 +375,8 @@ export class TreeNav {
             list: '<line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><circle cx="4" cy="6" r="2" fill="currentColor"/><circle cx="4" cy="12" r="2" fill="currentColor"/><circle cx="4" cy="18" r="2" fill="currentColor"/>',
             users: '<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>',
             user: '<path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>',
-            summary: '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14,2 14,8 20,8"/><line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="17" x2="12" y2="17"/>'
+            summary: '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14,2 14,8 20,8"/><line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="17" x2="12" y2="17"/>',
+            analysis: '<rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="9" y1="21" x2="9" y2="9"/><path d="M14 14h.01"/>'
         };
 
         const paddingLeft = 12 + (depth * 16);
@@ -419,10 +448,12 @@ export class TreeNav {
                 break;
             case 'part':
                 const hasSummary = this.app.state.summaries?.parts?.[id];
+                const hasAnalysis = this.app.state.analysis?.parts?.[id];
                 items = [
                     { label: 'Add Chapter', onClick: () => this.addChapter(id) },
                     { divider: true },
                     { label: hasSummary ? '🔄 Regenerate Summary' : '📝 Generate Summary', onClick: () => this.generatePartSummary(id) },
+                    { label: hasAnalysis ? '🔄 Regenerate Analysis' : '🔍 Agent Analysis', onClick: () => this.generatePartAnalysis(id) },
                     { divider: true },
                     { label: 'Rename', onClick: () => this.rename('part', id) },
                     { label: 'Delete', onClick: () => this.deletePart(id) }
@@ -528,6 +559,7 @@ export class TreeNav {
             case 'character': this.loadCharacter(id); break;
             case 'note': this.loadNote(id); break;
             case 'summary': this.loadSummary(id); break;
+            case 'analysis': this.loadAnalysis(id); break;
         }
     }
 
@@ -1395,4 +1427,384 @@ Return the full text with suggestions:`;
             this.selectItem(this.container.querySelector(`[data-id="${sceneId}"]`));
         }
     }
+
+    // ========== PART ANALYSIS ==========
+    async generatePartAnalysis(partId) {
+        const part = this.app.state.manuscript.parts.find(p => p.id === partId);
+        if (!part) {
+            alert('Part not found.');
+            return;
+        }
+
+        // Build full manuscript content for context (strip HTML and suggestion markers)
+        let manuscriptContent = '';
+        let partContent = '';
+        let sceneMap = {}; // Map scene titles to IDs for clickable links
+
+        this.app.state.manuscript.parts.forEach(p => {
+            const partTitle = p.displayTitle || p.title;
+            manuscriptContent += `\n\n=== ${partTitle} ===\n\n`;
+
+            p.chapters?.forEach(c => {
+                manuscriptContent += `## ${c.title}\n\n`;
+                c.scenes?.forEach(s => {
+                    // Strip HTML and suggestion markers
+                    let content = s.content?.replace(/<[^>]*>/g, ' ') || '';
+                    content = content.replace(/\[S\d+:[^\]]+\]/g, ''); // Remove [S1: ...] markers
+                    content = content.replace(/\s+/g, ' ').trim();
+
+                    manuscriptContent += `### ${s.title}\n${content}\n\n`;
+
+                    // Build scene map for the analyzed part
+                    if (p.id === partId) {
+                        const sceneKey = `${c.title}|${s.title}`;
+                        sceneMap[sceneKey] = { sceneId: s.id, chapterId: c.id, partId: p.id };
+                        partContent += `## ${c.title} > ${s.title}\n${content}\n\n`;
+                    }
+                });
+            });
+        });
+
+        if (!partContent.trim()) {
+            alert('This part has no content to analyze.');
+            return;
+        }
+
+        const partTitle = part.displayTitle || part.title;
+
+        // Initialize loading state
+        if (!this.app.state.analysis) this.app.state.analysis = { parts: {} };
+        this.app.state.analysis.parts[partId] = {
+            isLoading: true,
+            partTitle: partTitle,
+            generatedAt: new Date().toISOString()
+        };
+        this.app.save();
+
+        // Update tree and switch view immediately
+        this.render();
+        this.loadAnalysis(`analysis-${partId}`);
+
+        // Build the comprehensive analysis prompt
+        const systemPrompt = `You are a STRICT, UNCOMPROMISING manuscript editor at a top-tier publishing house. Your job is to provide HONEST, CRITICAL analysis. Writers come to you because they want the HARD TRUTH, not empty praise.
+
+## RATING STANDARDS (BE HARSH)
+- **10/10**: Masterpiece. Publishable as-is. You would rarely give this.
+- **8-9/10**: Excellent. Minor polish needed. Reserved for genuinely strong work.
+- **6-7/10**: Good foundation with notable issues that need fixing.
+- **4-5/10**: Average/mediocre. Typical for early drafts. Multiple significant problems.
+- **2-3/10**: Weak. Fundamental issues with craft. Needs major revision.
+- **1/10**: Severe problems throughout. Back to the drawing board.
+
+Most early-draft manuscripts should score in the 3-6 range. DO NOT inflate scores. If it reads like a first draft, rate it like a first draft.
+
+## CRITICAL GUIDELINES
+1. **CALL OUT EVERY WEAKNESS** - Do not hold back. If dialogue is stilted, say so. If pacing drags, point it out. If characters feel flat, be direct.
+2. **NO SUGARCOATING** - Don't soften criticism with excessive praise. Be direct and professional.
+3. **SPECIFIC REFERENCES** - Always cite specific scenes: "In Chapter X > Scene Y, the dialogue feels..."
+4. **ACTIONABLE FEEDBACK** - Every criticism must come with concrete suggestions for improvement.
+5. **STRENGTHS ONLY IF GENUINE** - Don't manufacture strengths to "balance" criticism. Empty praise is useless.
+6. **ASSUME NOTHING IS BEYOND CRITIQUE** - Even good elements can be improved.
+
+Your analysis must be USEFUL, not COMFORTABLE. The writer wants to improve, not feel good.
+
+You must return your analysis in the following JSON structure:
+{
+  "characterVoice": {
+    "rating": 5,
+    "strengths": ["Only genuine strengths with scene references - can be empty"],
+    "weaknesses": ["Every issue you find - be thorough"],
+    "keyFeedback": ["Specific, actionable fixes"],
+    "review": "Honest assessment - don't soften it"
+  },
+  "pacing": {
+    "rating": 4,
+    "strengths": ["..."],
+    "weaknesses": ["..."],
+    "keyFeedback": ["..."],
+    "review": "..."
+  },
+  "consistency": {
+    "rating": 6,
+    "strengths": ["..."],
+    "weaknesses": ["..."],
+    "keyFeedback": ["..."],
+    "review": "..."
+  },
+  "showVsTell": {
+    "rating": 4,
+    "strengths": ["..."],
+    "weaknesses": ["..."],
+    "keyFeedback": ["..."],
+    "review": "..."
+  },
+  "writingStyle": {
+    "passiveVoicePercent": 25,
+    "adverbUsage": "overused",
+    "sentenceVariety": "poor",
+    "readabilityScore": "Grade 8",
+    "strengths": ["..."],
+    "weaknesses": ["..."],
+    "review": "..."
+  },
+  "overall": {
+    "rating": 5,
+    "summary": "Blunt, honest overview - what's the real state of this manuscript?",
+    "topPriorities": ["The biggest problem to fix first", "Second priority", "Third priority"],
+    "finalNotes": "Honest closing - what does the writer NEED to hear?"
+  }
+}
+
+When referencing scenes, ALWAYS use the format: "In [Chapter Title] > [Scene Title]..." so the writer can easily navigate there.`;
+
+        const userPrompt = `Please analyze this part of my novel manuscript: "${partTitle}"
+
+Here is the FULL MANUSCRIPT for context (so you understand the overall story):
+${manuscriptContent}
+
+---
+
+Here is the SPECIFIC PART to analyze in detail:
+${partContent}
+
+Please provide a comprehensive analysis covering:
+1. Character Voice Analysis - Do characters sound distinct? Is dialogue authentic?
+2. Pacing Analysis - Is the pacing appropriate? Any rushed or slow sections?
+3. Consistency Check - Any continuity issues with characters, timeline, or settings?
+4. Show vs Tell Analysis - Are emotions and actions shown or just told?
+5. Writing Style Report - Passive voice, adverbs, sentence variety, readability?
+
+Return your analysis as a JSON object following the exact structure specified.`;
+
+        try {
+            const messages = [
+                { role: 'system', content: systemPrompt },
+                { role: 'user', content: userPrompt }
+            ];
+
+            let fullResponse = '';
+            await this.app.aiService.sendMessageStream(
+                messages,
+                (chunk, accumulated) => {
+                    fullResponse = accumulated;
+                    // Could update loading text here if we wanted streaming updates
+                }
+            );
+
+            // Parse the JSON response
+            const analysis = this.parseAnalysisResponse(fullResponse, partId, partTitle, sceneMap);
+
+            // Store the analysis
+            if (!this.app.state.analysis) this.app.state.analysis = { parts: {} };
+            this.app.state.analysis.parts[partId] = {
+                generatedAt: new Date().toISOString(),
+                partTitle: partTitle,
+                sceneMap: sceneMap,
+                ...analysis
+            };
+
+            this.app.save();
+
+            // Refresh view
+            this.loadAnalysis(`analysis-${partId}`);
+
+            // Re-render tree (just in case title changed or something, though not needed really)
+            this.render();
+
+        } catch (error) {
+            console.error('Analysis generation failed:', error);
+            alert('Analysis generation failed: ' + error.message);
+
+            // Clear loading state
+            if (this.app.state.analysis?.parts?.[partId]) {
+                delete this.app.state.analysis.parts[partId];
+                this.app.save();
+                this.render();
+            }
+        }
+    }
+
+    parseAnalysisResponse(response, partId, partTitle, sceneMap) {
+        try {
+            // Extract JSON from response (handle markdown code blocks)
+            let jsonStr = response;
+            const jsonMatch = response.match(/```json?\s*([\s\S]*?)```/);
+            if (jsonMatch) {
+                jsonStr = jsonMatch[1];
+            } else {
+                // Try to find JSON object directly
+                const startIdx = response.indexOf('{');
+                const endIdx = response.lastIndexOf('}');
+                if (startIdx !== -1 && endIdx !== -1) {
+                    jsonStr = response.substring(startIdx, endIdx + 1);
+                }
+            }
+
+            return JSON.parse(jsonStr);
+        } catch (error) {
+            console.error('Failed to parse analysis JSON:', error);
+            // Return a fallback structure with the raw response
+            return {
+                parseError: true,
+                rawResponse: response,
+                characterVoice: { rating: 0, strengths: [], weaknesses: [], keyFeedback: [], review: 'Parse error' },
+                pacing: { rating: 0, strengths: [], weaknesses: [], keyFeedback: [], review: 'Parse error' },
+                consistency: { rating: 0, strengths: [], weaknesses: [], keyFeedback: [], review: 'Parse error' },
+                showVsTell: { rating: 0, strengths: [], weaknesses: [], keyFeedback: [], review: 'Parse error' },
+                writingStyle: { strengths: [], weaknesses: [], review: 'Parse error' },
+                overall: { rating: 0, summary: 'Analysis parsing failed. Raw response saved.', topPriorities: [], finalNotes: '' }
+            };
+        }
+    }
+
+    // Load analysis into editor
+    loadAnalysis(analysisId) {
+        // ID format: analysis-{partId}
+        const partId = analysisId.replace('analysis-', '');
+        const analysis = this.app.state.analysis?.parts?.[partId];
+        const editor = document.getElementById('editor-content');
+
+        if (!analysis || !editor) return;
+
+        // Set context
+        this.app.currentContext = { type: 'analysis', analysisId, partId };
+
+        // Handle loading state
+        if (analysis.isLoading) {
+            editor.innerHTML = `
+                <div class="analysis-loading-container">
+                    <div class="loading-spinner large"></div>
+                    <h2>Analyzing "${analysis.partTitle}"...</h2>
+                    <p class="loading-hint">The AI is reviewing character voices, pacing, consistency, and style. This allows for deep insights but takes about a minute.<br>You can switch to other documents while this runs background.</p>
+                </div>
+            `;
+            return;
+        }
+
+        const renderStars = (rating) => {
+            const filled = Math.round(rating);
+            const empty = 10 - filled;
+            return '⭐'.repeat(filled) + '☆'.repeat(empty);
+        };
+
+        const renderList = (items, className = '') => {
+            if (!items || items.length === 0) return '<p class="analysis-none">None identified</p>';
+            return `<ul class="${className}">${items.map(i => `<li>${this.linkifySceneReferences(i, analysis.sceneMap)}</li>`).join('')}</ul>`;
+        };
+
+        const renderCategory = (title, icon, data) => {
+            return `
+                <div class="analysis-category">
+                    <div class="analysis-category-header">
+                        <span class="analysis-category-icon">${icon}</span>
+                        <span class="analysis-category-title">${title}</span>
+                        <span class="analysis-rating" title="${data.rating}/10">${renderStars(data.rating)}</span>
+                    </div>
+                    <div class="analysis-category-body">
+                        ${data.strengths?.length ? `<div class="analysis-subsection"><strong>✅ Strengths</strong>${renderList(data.strengths, 'analysis-strengths')}</div>` : ''}
+                        ${data.weaknesses?.length ? `<div class="analysis-subsection"><strong>⚠️ Areas for Improvement</strong>${renderList(data.weaknesses, 'analysis-weaknesses')}</div>` : ''}
+                        ${data.keyFeedback?.length ? `<div class="analysis-subsection"><strong>💡 Key Feedback</strong>${renderList(data.keyFeedback, 'analysis-feedback')}</div>` : ''}
+                        <div class="analysis-review">${this.linkifySceneReferences(data.review || '', analysis.sceneMap)}</div>
+                    </div>
+                </div>
+            `;
+        };
+
+        const writingStyleHtml = `
+            <div class="analysis-category">
+                <div class="analysis-category-header">
+                    <span class="analysis-category-icon">📊</span>
+                    <span class="analysis-category-title">Writing Style Report</span>
+                </div>
+                <div class="analysis-category-body">
+                    <div class="analysis-metrics">
+                        ${analysis.writingStyle?.passiveVoicePercent !== undefined ? `<span class="metric"><strong>Passive Voice:</strong> ${analysis.writingStyle.passiveVoicePercent}%</span>` : ''}
+                        ${analysis.writingStyle?.adverbUsage ? `<span class="metric"><strong>Adverb Usage:</strong> ${analysis.writingStyle.adverbUsage}</span>` : ''}
+                        ${analysis.writingStyle?.sentenceVariety ? `<span class="metric"><strong>Sentence Variety:</strong> ${analysis.writingStyle.sentenceVariety}</span>` : ''}
+                        ${analysis.writingStyle?.readabilityScore ? `<span class="metric"><strong>Readability:</strong> ${analysis.writingStyle.readabilityScore}</span>` : ''}
+                    </div>
+                    ${analysis.writingStyle?.strengths?.length ? `<div class="analysis-subsection"><strong>✅ Strengths</strong>${renderList(analysis.writingStyle.strengths, 'analysis-strengths')}</div>` : ''}
+                    ${analysis.writingStyle?.weaknesses?.length ? `<div class="analysis-subsection"><strong>⚠️ Areas for Improvement</strong>${renderList(analysis.writingStyle.weaknesses, 'analysis-weaknesses')}</div>` : ''}
+                    <div class="analysis-review">${this.linkifySceneReferences(analysis.writingStyle?.review || '', analysis.sceneMap)}</div>
+                </div>
+            </div>
+        `;
+
+        const overallHtml = `
+            <div class="analysis-overall">
+                <div class="analysis-overall-header">
+                    <span>📋 OVERALL ASSESSMENT</span>
+                    <span class="analysis-rating-large" title="${analysis.overall?.rating || 0}/10">${renderStars(analysis.overall?.rating || 0)} (${analysis.overall?.rating || 0}/10)</span>
+                </div>
+                <div class="analysis-overall-body">
+                    <div class="analysis-summary">${this.linkifySceneReferences(analysis.overall?.summary || '', analysis.sceneMap)}</div>
+                    ${analysis.overall?.topPriorities?.length ? `
+                        <div class="analysis-priorities">
+                            <strong>🎯 Top Priorities:</strong>
+                            <ol>${analysis.overall.topPriorities.map(p => `<li>${this.linkifySceneReferences(p, analysis.sceneMap)}</li>`).join('')}</ol>
+                        </div>
+                    ` : ''}
+                    ${analysis.overall?.finalNotes ? `<div class="analysis-final-notes">${this.linkifySceneReferences(analysis.overall.finalNotes, analysis.sceneMap)}</div>` : ''}
+                </div>
+            </div>
+        `;
+
+        editor.innerHTML = `
+            <div class="analysis-report-container">
+                <div class="analysis-header main-view-header">
+                    <h1>📊 ${analysis.partTitle} Analysis</h1>
+                    <span class="analysis-timestamp">Generated: ${new Date(analysis.generatedAt).toLocaleString()}</span>
+                </div>
+
+                <div class="analysis-report-content">
+                    ${renderCategory('Character Voice Analysis', '🎭', analysis.characterVoice || {})}
+                    ${renderCategory('Pacing Analysis', '⏱️', analysis.pacing || {})}
+                    ${renderCategory('Consistency Check', '🔍', analysis.consistency || {})}
+                    ${renderCategory('Show vs Tell Analysis', '👁️', analysis.showVsTell || {})}
+                    ${writingStyleHtml}
+                    ${overallHtml}
+                </div>
+            </div>
+        `;
+
+        // Bind click handlers for scene links
+        editor.querySelectorAll('.scene-link').forEach(link => {
+            link.addEventListener('click', (e) => {
+                e.preventDefault();
+                const { sceneId, chapterId, partId } = link.dataset;
+                if (sceneId && chapterId && partId) {
+                    this.app.loadSceneView(partId, chapterId, sceneId);
+                    // Tree nav update is handled by loadSceneView and selectItem
+                }
+            });
+        });
+    }
+
+    // Linkify helper remains the same
+    linkifySceneReferences(text, sceneMap) {
+        if (!text || !sceneMap) return text;
+
+        let result = text;
+
+        Object.keys(sceneMap).forEach(key => {
+            const [chapterTitle, sceneTitle] = key.split('|');
+            const sceneData = sceneMap[key];
+
+            const patterns = [
+                new RegExp(`${chapterTitle}\\s*>\\s*${sceneTitle}`, 'gi'),
+                new RegExp(`\\[${chapterTitle}\\]\\s*>\\s*\\[${sceneTitle}\\]`, 'gi'),
+                new RegExp(`"${chapterTitle}\\s*>\\s*${sceneTitle}"`, 'gi')
+            ];
+
+            patterns.forEach(pattern => {
+                result = result.replace(pattern, (match) => {
+                    return `<a href="#" class="scene-link" data-scene-id="${sceneData.sceneId}" data-chapter-id="${sceneData.chapterId}" data-part-id="${sceneData.partId}">${match}</a>`;
+                });
+            });
+        });
+
+        return result;
+    }
+
+
 }

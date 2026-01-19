@@ -350,6 +350,7 @@ export class ContextManager {
             includeCharacters = false,
             includePlot = false,
             includeNotes = false,
+            includeAnalysis = false,
             customChapterId = null
         } = options;
 
@@ -454,6 +455,10 @@ export class ContextManager {
             context += this.getStoryNotes() + '\n---\n\n';
         }
 
+        if (includeAnalysis) {
+            context += this.getAnalysisContext() + '\n---\n\n';
+        }
+
         return context;
     }
 
@@ -487,5 +492,74 @@ export class ContextManager {
             sceneCount: totalScenes,
             wordCount: totalWords
         };
+    }
+
+    /**
+     * Get analysis context (triggered by {analysis} macro)
+     */
+    getAnalysisContext() {
+        const state = this.app.state;
+        const analyses = state.analysis?.parts || {};
+
+        if (Object.keys(analyses).length === 0) {
+            return '# Agent Analysis\nNo analysis reports available yet.';
+        }
+
+        let context = '# 📊 Agent Analysis Reports\n\n';
+
+        // Get parts in order
+        const parts = state.manuscript.parts || [];
+        parts.forEach(part => {
+            const analysis = analyses[part.id];
+            if (!analysis || analysis.isLoading) return;
+
+            const partTitle = part.displayTitle || part.title;
+            context += `## ${partTitle} Analysis\n`;
+            context += `*Generated: ${new Date(analysis.generatedAt).toLocaleString()}*\n\n`;
+
+            // Overall rating
+            if (analysis.overall) {
+                context += `**Overall Rating:** ${analysis.overall.rating}/10\n`;
+                context += `**Summary:** ${analysis.overall.summary}\n\n`;
+
+                if (analysis.overall.topPriorities?.length) {
+                    context += `**Top Priorities:**\n`;
+                    analysis.overall.topPriorities.forEach((p, i) => {
+                        context += `${i + 1}. ${p}\n`;
+                    });
+                    context += '\n';
+                }
+            }
+
+            // Category summaries (condensed)
+            const categories = [
+                { key: 'characterVoice', label: 'Character Voice' },
+                { key: 'pacing', label: 'Pacing' },
+                { key: 'consistency', label: 'Consistency' },
+                { key: 'showVsTell', label: 'Show vs Tell' },
+                { key: 'writingStyle', label: 'Writing Style' }
+            ];
+
+            categories.forEach(cat => {
+                const data = analysis[cat.key];
+                if (data) {
+                    context += `### ${cat.label}`;
+                    if (data.rating !== undefined) context += ` (${data.rating}/10)`;
+                    context += '\n';
+
+                    if (data.weaknesses?.length) {
+                        context += `- **Issues:** ${data.weaknesses.join('; ')}\n`;
+                    }
+                    if (data.keyFeedback?.length) {
+                        context += `- **Feedback:** ${data.keyFeedback.join('; ')}\n`;
+                    }
+                    context += '\n';
+                }
+            });
+
+            context += '---\n\n';
+        });
+
+        return context;
     }
 }
