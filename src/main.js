@@ -13,6 +13,7 @@ import { AgentPanel } from './ai/AgentPanel.js';
 import { StoryPulse } from './analytics/StoryPulse.js';
 import { AliveEditor } from './alive/AliveEditor.js';
 import { EchoChamber } from './alive/EchoChamber.js';
+import { ConnectionWeb } from './graph/ConnectionWeb.js';
 
 class NovelWriterApp {
   constructor() {
@@ -34,6 +35,7 @@ class NovelWriterApp {
     this.storyPulse = new StoryPulse(this);
     this.echoChamber = new EchoChamber(this);
     this.aliveEditor = new AliveEditor(this);
+    this.connectionWeb = new ConnectionWeb(this);
 
     this.bindEvents();
     this.bindSelectionEvents();
@@ -792,8 +794,9 @@ class NovelWriterApp {
    */
   parseSuggestionPlacements(annotatedText) {
     const placements = [];
-    // Match text before each suggestion tag
-    const regex = /([^.\n]*\.)\s*\[S(\d+):\s*([^\]]+)\]/g;
+    // Capture everything on the line before [S#: ...], using multiline mode
+    // This ensures we get full multi-sentence dialogue as the anchor
+    const regex = /^(.+?)\s*\[S(\d+):\s*([^\]]+)\]/gm;
     let match;
 
     while ((match = regex.exec(annotatedText)) !== null) {
@@ -841,10 +844,33 @@ class NovelWriterApp {
    */
   findTextRange(container, searchText) {
     const fullText = container.textContent;
-    const startIndex = fullText.indexOf(searchText);
-    if (startIndex === -1) return null;
 
-    const endIndex = startIndex + searchText.length;
+    // Normalize function for comparison
+    const normalize = (str) => str
+      .replace(/[\u201C\u201D]/g, '"')
+      .replace(/[\u2018\u2019]/g, "'");
+
+    const normalizedFull = normalize(fullText);
+    const normalizedSearch = normalize(searchText);
+
+    // Try to find in normalized text
+    let startIndex = normalizedFull.indexOf(normalizedSearch);
+
+    // If not found, try fuzzy matching
+    if (startIndex === -1) {
+      const result = this.fuzzyFindSubstring(normalizedFull, normalizedSearch, 0.85);
+      if (result) {
+        startIndex = result.index;
+      } else {
+        console.warn('findTextRange: No match found for:', searchText.substring(0, 50));
+        return null;
+      }
+    }
+
+    // Find the matching text in the original (for correct length)
+    const endIndex = startIndex + normalizedSearch.length;
+
+    // Now walk the DOM to find these character positions
     const range = document.createRange();
     let startFound = false;
     let endFound = false;
@@ -854,17 +880,22 @@ class NovelWriterApp {
     let node;
 
     while ((node = walker.nextNode())) {
-      const nodeLength = node.textContent.length;
+      const nodeText = node.textContent;
+      const normalizedNodeText = normalize(nodeText);
+      const nodeLength = normalizedNodeText.length;
       const nodeStart = charsCount;
       const nodeEnd = charsCount + nodeLength;
 
       if (!startFound && startIndex >= nodeStart && startIndex < nodeEnd) {
-        range.setStart(node, startIndex - nodeStart);
+        // Map from normalized position to actual node position
+        const offsetInNode = startIndex - nodeStart;
+        range.setStart(node, Math.min(offsetInNode, nodeText.length));
         startFound = true;
       }
 
       if (!endFound && endIndex > nodeStart && endIndex <= nodeEnd) {
-        range.setEnd(node, endIndex - nodeStart);
+        const offsetInNode = endIndex - nodeStart;
+        range.setEnd(node, Math.min(offsetInNode, nodeText.length));
         endFound = true;
         break;
       }
@@ -873,6 +904,65 @@ class NovelWriterApp {
     }
 
     return (startFound && endFound) ? range : null;
+  }
+
+  /**
+   * Fuzzy substring search - finds best matching substring above threshold
+   */
+  fuzzyFindSubstring(haystack, needle, threshold) {
+    if (needle.length < 5) return null; // Too short for fuzzy matching
+
+    const needleLen = needle.length;
+    let bestMatch = null;
+    let bestScore = threshold;
+
+    // Slide a window of needle length across haystack
+    for (let i = 0; i <= haystack.length - needleLen; i++) {
+      const candidate = haystack.substring(i, i + needleLen);
+      const score = this.similarity(candidate, needle);
+
+      if (score > bestScore) {
+        bestScore = score;
+        bestMatch = { index: i, length: needleLen, score };
+      }
+    }
+
+    // Also try slightly shorter/longer windows
+    for (let lenOffset = -5; lenOffset <= 5; lenOffset++) {
+      const windowLen = needleLen + lenOffset;
+      if (windowLen < 5 || windowLen > haystack.length) continue;
+
+      for (let i = 0; i <= haystack.length - windowLen; i++) {
+        const candidate = haystack.substring(i, i + windowLen);
+        const score = this.similarity(candidate, needle);
+
+        if (score > bestScore) {
+          bestScore = score;
+          bestMatch = { index: i, length: windowLen, score };
+        }
+      }
+    }
+
+    return bestMatch;
+  }
+
+  /**
+   * Calculate similarity ratio between two strings (0-1)
+   */
+  similarity(a, b) {
+    if (a === b) return 1;
+    if (a.length === 0 || b.length === 0) return 0;
+
+    // Simple character-level similarity
+    let matches = 0;
+    const shorter = a.length < b.length ? a : b;
+    const longer = a.length < b.length ? b : a;
+
+    for (let i = 0; i < shorter.length; i++) {
+      if (shorter[i] === longer[i]) matches++;
+    }
+
+    return matches / longer.length;
   }
 
   /**

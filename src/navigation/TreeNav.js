@@ -504,7 +504,8 @@ export class TreeNav {
                             { label: '🌿 Add Sensory Details', onClick: () => this.generateSuggestions(id, parent, grandparent, 'sensory') },
                             { label: '✏️ Grammar Check', onClick: () => this.generateSuggestions(id, parent, grandparent, 'grammar') },
                             { label: '✨ Prose Improvement', onClick: () => this.generateSuggestions(id, parent, grandparent, 'prose') },
-                            { label: '🔍 General Review', onClick: () => this.generateSuggestions(id, parent, grandparent, 'review') }
+                            { label: '🔍 General Review', onClick: () => this.generateSuggestions(id, parent, grandparent, 'review') },
+                            { label: '⚓ Anchor Dialogue', onClick: () => this.generateSuggestions(id, parent, grandparent, 'anchor') }
                         ]
                     },
                     ...(hasSuggestions ? [{ label: '🗑️ Clear All Suggestions', onClick: () => this.clearSuggestions(id, parent, grandparent) }] : []),
@@ -1339,12 +1340,30 @@ Write a clear, narrative summary of the story events in this specific part:`;
             sensory: 'Look for opportunities to add sensory details (sight, sound, smell, touch, taste).',
             grammar: 'Check for grammar, punctuation, and syntax issues.',
             prose: 'Suggest improvements to prose style, word choice, and sentence variety.',
-            review: 'Provide a general review covering pacing, clarity, engagement, and any issues.'
+            review: 'Provide a general review covering pacing, clarity, engagement, and any issues.',
+            anchor: `Analyze dialogue for ANCHORING issues. A line is unanchored when:
+1. The previous line was spoken by a different character, AND
+2. There is no action, POV cue, spatial cue, or established alternation, AND
+3. Multiple characters could plausibly speak it
+
+For EACH unanchored line, suggest a contextual anchor using:
+- Character action (fidgeting, drinking, looking away)
+- Spatial context (position in room, proximity to objects)
+- POV character's observation of the speaker
+- Character-specific mannerisms from context
+- Emotional state cues
+
+IMPORTANT: Number suggestions SEQUENTIALLY (S1, S2, S3, S4...). Do NOT skip numbers.
+
+DO NOT suggest "he said" / "she said". Suggest GRRM-style anchors like:
+"Tyrion swirled his wine. 'That depends.'"
+"From the doorway, Cersei's voice cut through. 'You're too late.'"`
         };
 
         const typeLabels = {
             expand: 'Expand', shorten: 'Shorten', dialogue: 'Improve Dialogue',
-            sensory: 'Add Sensory Details', grammar: 'Grammar Check', prose: 'Prose Improvement', review: 'General Review'
+            sensory: 'Add Sensory Details', grammar: 'Grammar Check', prose: 'Prose Improvement', review: 'General Review',
+            anchor: 'Anchor Dialogue'
         };
 
         const systemPrompt = `You are an editorial assistant. Analyze a scene and provide suggestions.
@@ -1400,8 +1419,18 @@ Return the full text with suggestions:`;
                 (chunk, accumulated) => { fullResponse = accumulated; }
             );
 
+            // DEBUG: Log raw AI response
+            console.log('=== RAW AI RESPONSE ===');
+            console.log(fullResponse);
+            console.log('=== END RAW RESPONSE ===');
+
             // Parse suggestions from response
             const suggestions = this.parseSuggestions(fullResponse);
+
+            // DEBUG: Log parsed suggestions
+            console.log('=== PARSED SUGGESTIONS ===');
+            console.log(suggestions);
+            console.log('=== END PARSED ===');
 
             // Store BOTH the annotated text AND individual suggestions
             scene.suggestions = {
@@ -1425,7 +1454,10 @@ Return the full text with suggestions:`;
 
     parseSuggestions(responseText) {
         const suggestions = [];
-        const regex = /\[S(\d+):\s*([^\]]+)\]/g;
+        // Use a more robust regex that handles nested brackets/quotes
+        // Match [S#: ...] where content can include anything except ]
+        // followed by end-of-suggestion markers (newline, period+space, or end)
+        const regex = /\[S(\d+):\s*((?:[^\[\]]|\[[^\]]*\])*)\]/g;
         let match;
 
         while ((match = regex.exec(responseText)) !== null) {

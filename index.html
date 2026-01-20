@@ -45,6 +45,16 @@
             <path d="M18.7 8l-5.1 5.2-2.8-2.7L7 14.3" />
           </svg>
         </button>
+        <button class="icon-btn" id="btn-connection-web" title="Connection Web (Relationship Graph)">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="12" cy="5" r="3" />
+            <circle cx="5" cy="19" r="3" />
+            <circle cx="19" cy="19" r="3" />
+            <line x1="12" y1="8" x2="5" y2="16" />
+            <line x1="12" y1="8" x2="19" y2="16" />
+            <line x1="5" y1="19" x2="19" y2="19" />
+          </svg>
+        </button>
         <button class="icon-btn" id="btn-thesaurus" title="Thesaurus">
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" />
@@ -577,6 +587,68 @@
           <div class="echo-log-content" id="echo-log-content">
             <div class="echo-log-empty">No changes logged yet.</div>
           </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <!-- Connection Web Modal -->
+  <div class="modal connection-web-modal" id="connection-web-modal">
+    <div class="modal-backdrop" id="connection-web-backdrop"></div>
+    <div class="modal-content connection-web-content">
+      <div class="modal-header">
+        <h2>🕸️ Connection Web</h2>
+        <button class="icon-btn" id="close-connection-web">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <line x1="18" y1="6" x2="6" y2="18"></line>
+            <line x1="6" y1="6" x2="18" y2="18"></line>
+          </svg>
+        </button>
+      </div>
+      <div class="modal-body connection-web-body">
+        <div class="connection-web-toolbar">
+          <button class="btn btn-primary" id="btn-generate-web">
+            <span class="btn-icon">✨</span>
+            <span id="generate-web-text">Generate Web</span>
+          </button>
+          <button class="btn btn-secondary" id="btn-add-node" disabled>
+            <span class="btn-icon">➕</span> Add Node
+          </button>
+          <button class="btn btn-secondary" id="btn-add-edge" disabled>
+            <span class="btn-icon">🔗</span> Link Nodes
+          </button>
+          <div class="connection-web-zoom">
+            <button class="icon-btn" id="btn-zoom-out" title="Zoom Out">−</button>
+            <span id="zoom-level">100%</span>
+            <button class="icon-btn" id="btn-zoom-in" title="Zoom In">+</button>
+            <button class="icon-btn" id="btn-zoom-fit" title="Fit to View">⊙</button>
+          </div>
+        </div>
+
+        <div class="connection-web-main">
+          <div class="connection-web-canvas" id="connection-web-canvas">
+            <div class="connection-web-placeholder">
+              <div class="placeholder-icon">🕸️</div>
+              <div class="placeholder-text">Click "Generate Web" to analyze your manuscript and create a connection
+                graph.</div>
+            </div>
+          </div>
+
+          <div class="connection-web-inspector" id="connection-web-inspector">
+            <div class="inspector-header">
+              <h3>Inspector</h3>
+            </div>
+            <div class="inspector-content" id="inspector-content">
+              <div class="inspector-empty">Select a node or edge to view details.</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="connection-web-legend">
+          <span class="legend-item"><span class="legend-dot" style="background: #4A90D9"></span> Character</span>
+          <span class="legend-item"><span class="legend-dot" style="background: #D94A4A"></span> Faction</span>
+          <span class="legend-item"><span class="legend-dot" style="background: #4AD97A"></span> Location</span>
+          <span class="legend-item"><span class="legend-dot" style="background: #D9A84A"></span> Plot Point</span>
+          <span class="legend-item"><span class="legend-dot" style="background: #9B4AD9"></span> Item</span>
         </div>
       </div>
     </div>
