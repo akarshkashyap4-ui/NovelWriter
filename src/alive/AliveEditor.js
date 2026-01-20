@@ -66,6 +66,9 @@ export class AliveEditor {
                 }
             }
         }
+        // Also notify Echo Chamber (first, so updatePanel reflects new state)
+        this.app.echoChamber?.onLettersTyped(amount);
+
         this.updatePanel();
     }
 
@@ -171,9 +174,14 @@ Respond with ONLY the mood word.`;
         if (!this.panel) return;
 
         let html = '';
-        for (const [key, f] of Object.entries(this.features)) {
+
+        // Mood and Remarks (managed locally here)
+        const localFeatures = ['mood', 'remarks'];
+        localFeatures.forEach(key => {
+            const f = this.features[key];
             const pct = Math.min(100, (this.counters[key] / f.trigger) * 100);
             const cls = !f.enabled ? 'disabled' : f.pending ? 'pending' : '';
+
             html += `<div class="alive-feature ${cls}">
                 <span class="alive-icon">${f.icon}</span>
                 <span class="alive-label">${f.label}</span>
@@ -181,7 +189,26 @@ Respond with ONLY the mood word.`;
                 ${f.enabled ? `<div class="alive-progress" style="width:${pct}%"></div>` : ''}
                 ${f.pending ? '<span class="alive-spinner">⟳</span>' : ''}
             </div>`;
+        });
+
+        // Echo Chamber (managed remotely)
+        const echo = this.app.echoChamber;
+        if (echo) {
+            const isActive = echo.isActive;
+            const current = echo.letterCounter || 0;
+            const trigger = echo.letterTrigger || 500;
+            const isGenerating = echo.isGenerating || false;
+            const pct = Math.min(100, (current / trigger) * 100);
+
+            html += `<div class="alive-feature ${!isActive ? 'disabled' : ''} ${isGenerating ? 'pending' : ''}">
+                <span class="alive-icon">👥</span>
+                <span class="alive-label">Echo</span>
+                <span class="alive-counter">${isActive ? `${current}/${trigger}` : 'OFF'}</span>
+                ${isActive ? `<div class="alive-progress" style="width:${pct}%"></div>` : ''}
+                ${isGenerating ? '<span class="alive-spinner">⟳</span>' : ''}
+            </div>`;
         }
+
         this.panel.innerHTML = html;
     }
 

@@ -172,6 +172,10 @@
             <span class="mood-label">--</span>
           </span>
           <span class="status-divider">|</span>
+          <button class="status-btn" id="btn-echo-chamber" title="Echo Chamber">
+            💬 Echo
+          </button>
+          <span class="status-divider">|</span>
           <span class="status-item" id="save-status">Saved</span>
         </div>
 
@@ -308,15 +312,7 @@
                 <span class="setting-hint">letters</span>
               </div>
             </div>
-            <div class="setting-row">
-              <label>👥 Echo Chamber</label>
-              <div class="setting-inline">
-                <input type="checkbox" id="setting-alive-echo-enabled" />
-                <input type="number" id="setting-alive-echo-trigger" value="500" min="10" max="2000"
-                  style="width: 70px;" />
-                <span class="setting-hint">letters</span>
-              </div>
-            </div>
+
           </div>
         </div>
         <div class="modal-footer">
@@ -529,6 +525,59 @@
       <div class="modal-footer">
         <button class="btn btn-secondary" id="close-story-pulse-btn">Cancel</button>
         <button class="btn btn-primary" id="btn-run-pulse">Run Analysis (Whole Book)</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Echo Chamber Modal -->
+  <div class="modal echo-chamber-modal" id="echo-chamber-modal">
+    <div class="modal-backdrop" id="echo-chamber-backdrop"></div>
+    <div class="modal-content echo-chamber-content">
+      <div class="modal-header">
+        <h2>💬 Echo Chamber</h2>
+        <button class="icon-btn" id="close-echo-chamber">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <line x1="18" y1="6" x2="6" y2="18"></line>
+            <line x1="6" y1="6" x2="18" y2="18"></line>
+          </svg>
+        </button>
+      </div>
+
+      <!-- Echo Chamber Controls -->
+      <div class="echo-controls">
+        <div class="echo-controls-left">
+          <button class="btn btn-success" id="btn-start-echo">▶ Start</button>
+          <button class="btn btn-danger" id="btn-stop-echo">⏹ Stop</button>
+          <span class="echo-status" id="echo-status">Echo Chamber is paused</span>
+        </div>
+        <div class="echo-controls-right">
+          <label>
+            Trigger:
+            <input type="number" id="echo-trigger-count" value="500" min="100" max="2000" step="100">
+            letters
+          </label>
+          <button class="btn btn-secondary btn-sm" id="btn-new-echo-chat" title="New Conversation">🗑️ New</button>
+        </div>
+      </div>
+
+      <!-- Echo Chat Container -->
+      <div class="modal-body echo-modal-body">
+        <div class="echo-chat-area">
+          <div class="echo-chat-container" id="echo-chat-container">
+            <div class="echo-placeholder">Start the Echo Chamber to see your readers react!</div>
+          </div>
+        </div>
+
+        <!-- Collapsible Change Log Panel -->
+        <div class="echo-log-panel" id="echo-log-panel">
+          <div class="echo-log-header" id="btn-toggle-echo-log">
+            <span>📋 Change Log</span>
+            <span class="echo-log-toggle">▼</span>
+          </div>
+          <div class="echo-log-content" id="echo-log-content">
+            <div class="echo-log-empty">No changes logged yet.</div>
+          </div>
+        </div>
       </div>
     </div>
   </div>

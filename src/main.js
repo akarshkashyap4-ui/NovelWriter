@@ -12,6 +12,7 @@ import { APIConfig } from './ai/APIConfig.js';
 import { AgentPanel } from './ai/AgentPanel.js';
 import { StoryPulse } from './analytics/StoryPulse.js';
 import { AliveEditor } from './alive/AliveEditor.js';
+import { EchoChamber } from './alive/EchoChamber.js';
 
 class NovelWriterApp {
   constructor() {
@@ -32,6 +33,7 @@ class NovelWriterApp {
     this.agentPanel = new AgentPanel(this);
     this.storyPulse = new StoryPulse(this);
     this.aliveEditor = new AliveEditor(this);
+    this.echoChamber = new EchoChamber(this);
 
     this.bindEvents();
     this.bindSelectionEvents();

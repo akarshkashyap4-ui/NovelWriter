@@ -14,13 +14,11 @@ export class Settings {
         this.contextStrategySelect = document.getElementById('setting-ai-context-strategy');
         this.saveBtn = document.getElementById('save-settings');
 
-        // Alive Editor settings
+        // Alive Editor settings (Mood and Remarks only - Echo is controlled from its own modal)
         this.aliveMoodEnabled = document.getElementById('setting-alive-mood-enabled');
         this.aliveMoodTrigger = document.getElementById('setting-alive-mood-trigger');
         this.aliveRemarksEnabled = document.getElementById('setting-alive-remarks-enabled');
         this.aliveRemarksTrigger = document.getElementById('setting-alive-remarks-trigger');
-        this.aliveEchoEnabled = document.getElementById('setting-alive-echo-enabled');
-        this.aliveEchoTrigger = document.getElementById('setting-alive-echo-trigger');
 
         this.bindEvents();
     }
@@ -44,14 +42,12 @@ export class Settings {
         this.fontSelect.value = state.settings.font;
         this.contextStrategySelect.value = state.settings.contextStrategy || 'smart';
 
-        // Load Alive Editor settings
+        // Load Alive Editor settings (Mood and Remarks only)
         const alive = state.settings.alive || {};
         if (this.aliveMoodEnabled) this.aliveMoodEnabled.checked = alive.moodEnabled !== false;
         if (this.aliveMoodTrigger) this.aliveMoodTrigger.value = alive.moodTrigger || 50;
         if (this.aliveRemarksEnabled) this.aliveRemarksEnabled.checked = alive.remarksEnabled || false;
         if (this.aliveRemarksTrigger) this.aliveRemarksTrigger.value = alive.remarksTrigger || 300;
-        if (this.aliveEchoEnabled) this.aliveEchoEnabled.checked = alive.echoEnabled || false;
-        if (this.aliveEchoTrigger) this.aliveEchoTrigger.value = alive.echoTrigger || 500;
 
         this.modal.classList.add('open');
     }
@@ -76,14 +72,12 @@ export class Settings {
         // Update context strategy
         state.settings.contextStrategy = this.contextStrategySelect.value;
 
-        // Update Alive Editor settings
+        // Update Alive Editor settings (Mood and Remarks only - Echo is separate)
         state.settings.alive = {
             moodEnabled: this.aliveMoodEnabled?.checked ?? true,
             moodTrigger: parseInt(this.aliveMoodTrigger?.value) || 50,
             remarksEnabled: this.aliveRemarksEnabled?.checked || false,
-            remarksTrigger: parseInt(this.aliveRemarksTrigger?.value) || 300,
-            echoEnabled: this.aliveEchoEnabled?.checked || false,
-            echoTrigger: parseInt(this.aliveEchoTrigger?.value) || 500
+            remarksTrigger: parseInt(this.aliveRemarksTrigger?.value) || 300
         };
 
         // Update AliveEditor if it exists
