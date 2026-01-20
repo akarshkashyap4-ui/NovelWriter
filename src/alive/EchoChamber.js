@@ -456,6 +456,30 @@ export class EchoChamber {
         };
     }
 
+    getCharacterContext() {
+        const characters = this.app.state.characters || [];
+        if (!characters.length) return '';
+
+        let text = 'CHARACTERS:\n';
+
+        // Group by role
+        const casts = {};
+        characters.forEach(char => {
+            const role = char.role || 'Other';
+            if (!casts[role]) casts[role] = [];
+            casts[role].push(char);
+        });
+
+        Object.entries(casts).forEach(([role, chars]) => {
+            text += `\n### ${role}\n`;
+            chars.forEach(char => {
+                text += `- **${char.name}**: ${char.description || 'No description'}\n`;
+            });
+        });
+
+        return text;
+    }
+
     // ===== CONTEXT BUILDING =====
 
     buildOpeningContext() {
@@ -481,7 +505,10 @@ export class EchoChamber {
         const state = this.captureManuscriptState();
         const metadata = this.formatMetadata(state.metadata);
 
-        return { manuscript, sceneFocus, metadata };
+        // Character Data
+        const characters = this.getCharacterContext();
+
+        return { manuscript, sceneFocus, metadata, characters };
     }
 
     buildReactionContext() {
@@ -576,6 +603,9 @@ export class EchoChamber {
         const metadata = this.formatMetadata(currentState.metadata);
         const prevMetadata = this.previousState ? this.formatMetadata(this.previousState.metadata) : 'N/A (First trigger)';
 
+        // Character Data
+        const characters = this.getCharacterContext();
+
         // Note: previousState is updated in triggerReaction AFTER successful response
         // to prevent race conditions from skipping changes
 
@@ -589,7 +619,8 @@ export class EchoChamber {
             chatHistory,
             metadata,
             prevMetadata,
-            changes: changeResult.changes
+            changes: changeResult.changes,
+            characters
         };
     }
 
@@ -647,6 +678,12 @@ THE FULL MANUSCRIPT (everything written so far):
 ═══════════════════════════════════════════════════════
 
 ${context.manuscript}
+
+═══════════════════════════════════════════════════════
+THE CAST (Characters):
+═══════════════════════════════════════════════════════
+
+${context.characters}
 
 ═══════════════════════════════════════════════════════
 CURRENT WRITING FOCUS: ${context.sceneFocus}
@@ -745,6 +782,12 @@ THE READERS (embody each one's unique voice):
 ═══════════════════════════════════════════════════════
 
 ${readerDescriptions}
+
+═══════════════════════════════════════════════════════
+THE CAST (Characters):
+═══════════════════════════════════════════════════════
+
+${context.characters}
 
 ═══════════════════════════════════════════════════════
 CURRENT MANUSCRIPT STATE:

@@ -66,12 +66,27 @@ export class ImageService {
 
     /**
      * Add generated image to global gallery
+     * Now saves to filesystem and stores only filename
      */
-    addToGallery(imageData, prompt, meta = {}) {
+    async addToGallery(imageData, prompt, meta = {}) {
         const gallery = this.getGallery();
+        const id = Date.now().toString();
+
+        // Try to save to filesystem
+        let filename = null;
+        try {
+            if (this.app.fileStorage?.isSupported()) {
+                filename = await this.app.fileStorage.saveImage(imageData, `gallery-${id}`);
+            }
+        } catch (err) {
+            console.error('[ImageService] Failed to save to filesystem:', err);
+        }
+
         const newItem = {
-            id: Date.now().toString(),
-            imageData,
+            id,
+            // Store filename if saved to file, otherwise fall back to base64 (legacy)
+            filename: filename || null,
+            imageData: filename ? null : imageData, // Only store base64 if no file
             prompt,
             meta,
             timestamp: new Date().toISOString()
@@ -81,7 +96,11 @@ export class ImageService {
 
         // Limit history to 50 images
         if (gallery.length > 50) {
-            gallery.pop();
+            const removed = gallery.pop();
+            // Delete old file if it exists
+            if (removed?.filename && this.app.fileStorage) {
+                this.app.fileStorage.deleteImage(removed.filename).catch(() => { });
+            }
         }
 
         this.app.state.imageGallery = gallery;
@@ -100,12 +119,35 @@ export class ImageService {
     }
 
     /**
+     * Load image data for a gallery item
+     * Handles both file-based and legacy base64 storage
+     */
+    async loadGalleryImage(item) {
+        if (item.imageData) {
+            // Legacy base64 format
+            return item.imageData;
+        }
+        if (item.filename && this.app.fileStorage) {
+            // Load from file
+            return await this.app.fileStorage.loadImage(item.filename);
+        }
+        return null;
+    }
+
+    /**
      * Remove image from gallery
      */
-    removeFromGallery(id) {
+    async removeFromGallery(id) {
         const gallery = this.getGallery();
         const index = gallery.findIndex(item => item.id === id);
         if (index !== -1) {
+            const removed = gallery[index];
+
+            // Delete file if exists
+            if (removed.filename && this.app.fileStorage) {
+                await this.app.fileStorage.deleteImage(removed.filename);
+            }
+
             gallery.splice(index, 1);
             this.app.state.imageGallery = gallery;
             this.app.save();

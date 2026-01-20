@@ -14,19 +14,28 @@ export class TreeNav {
         this.contextMenu = getContextMenu();
         this.draggedItem = null;
 
-        // Initialize collapsed items from state (persisted)
+        // Separate storage key for UI state (not tied to project save)
+        this.uiStorageKey = 'novelwriter_ui_collapse';
+
+        // Initialize collapsed items from separate localStorage
         this.initCollapseState();
 
         this.bindEvents();
     }
 
     initCollapseState() {
-        // Ensure state has collapsedItems array
-        if (!this.app.state.ui) this.app.state.ui = {};
-        if (!this.app.state.ui.collapsedItems) this.app.state.ui.collapsedItems = [];
-
-        // Use a Set for quick lookup
-        this.collapsedItems = new Set(this.app.state.ui.collapsedItems);
+        // Load from SEPARATE localStorage key (not project data)
+        try {
+            const saved = localStorage.getItem(this.uiStorageKey);
+            const parsed = saved ? JSON.parse(saved) : {};
+            // Use project-specific collapse state
+            const projectId = this.app.state?.id || 'default';
+            this.collapsedItems = new Set(parsed[projectId] || []);
+            console.log('[TreeNav] initCollapseState - Loaded:', Array.from(this.collapsedItems));
+        } catch (e) {
+            console.error('[TreeNav] Failed to load collapse state:', e);
+            this.collapsedItems = new Set();
+        }
     }
 
     isCollapsed(id) {
@@ -39,9 +48,21 @@ export class TreeNav {
         } else {
             this.collapsedItems.add(id);
         }
-        // Persist to state
-        this.app.state.ui.collapsedItems = Array.from(this.collapsedItems);
-        this.app.save();
+        // Save to SEPARATE localStorage (NOT app.save())
+        this.saveCollapseState();
+    }
+
+    saveCollapseState() {
+        try {
+            const projectId = this.app.state?.id || 'default';
+            const saved = localStorage.getItem(this.uiStorageKey);
+            const parsed = saved ? JSON.parse(saved) : {};
+            parsed[projectId] = Array.from(this.collapsedItems);
+            localStorage.setItem(this.uiStorageKey, JSON.stringify(parsed));
+            console.log('[TreeNav] saveCollapseState - Saved:', parsed[projectId]);
+        } catch (e) {
+            console.error('[TreeNav] Failed to save collapse state:', e);
+        }
     }
 
     bindEvents() {
@@ -49,6 +70,9 @@ export class TreeNav {
     }
 
     render() {
+        // Refresh collapse state from persisted storage
+        this.initCollapseState();
+
         const state = this.app.state;
 
         this.container.innerHTML = `
@@ -68,6 +92,9 @@ export class TreeNav {
         this.container.querySelectorAll('.tree-section-header').forEach(header => {
             header.addEventListener('click', (e) => {
                 if (!e.target.closest('.tree-section-menu-btn')) {
+                    const section = header.parentElement.dataset.section;
+                    const sectionId = `section-${section}`;
+                    this.toggleCollapse(sectionId);
                     header.parentElement.classList.toggle('collapsed');
                 }
             });
@@ -211,6 +238,9 @@ export class TreeNav {
 
     // ========== RENDERING ==========
     renderSection(title, id, content, hasMenu = false) {
+        const sectionId = `section-${id}`;
+        const isCollapsed = this.isCollapsed(sectionId);
+
         const menuBtn = hasMenu ? `
       <button class="tree-section-menu-btn icon-btn icon-btn-sm" title="Options">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
@@ -220,7 +250,7 @@ export class TreeNav {
     ` : '';
 
         return `
-      <div class="tree-section" data-section="${id}">
+      <div class="tree-section${isCollapsed ? ' collapsed' : ''}" data-section="${id}">
         <div class="tree-section-header">
           <svg class="tree-section-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <path d="M6 9l6 6 6-6"/>
@@ -1356,9 +1386,44 @@ Write a clear, narrative summary of the story events in this specific part:`;
             return;
         }
 
-        // Show loading state in editor
+        // Check if file storage folder is set up (requires user gesture)
         const editor = document.getElementById('editor-content');
         const originalContent = editor.innerHTML;
+
+        if (this.app.fileStorage?.isSupported() && !(await this.app.fileStorage.hasFolder())) {
+            // Show setup prompt with button (user gesture required)
+            editor.innerHTML = `
+                <div class="mood-art-setup">
+                    <h2>📁 Setup Images Folder</h2>
+                    <p>To save mood art images to your computer (instead of bloating storage), please select a folder.</p>
+                    <button id="setup-images-folder-btn" class="btn btn-primary">Select Images Folder</button>
+                    <button id="skip-folder-setup-btn" class="btn btn-secondary">Skip (use browser storage)</button>
+                </div>
+            `;
+
+            // Wait for user to click button
+            const result = await new Promise((resolve) => {
+                document.getElementById('setup-images-folder-btn').addEventListener('click', async () => {
+                    try {
+                        await this.app.fileStorage.pickFolder();
+                        resolve('selected');
+                    } catch (err) {
+                        console.error('Folder selection failed:', err);
+                        resolve('skipped');
+                    }
+                });
+                document.getElementById('skip-folder-setup-btn').addEventListener('click', () => {
+                    resolve('skipped');
+                });
+            });
+
+            if (result === 'skipped') {
+                // User skipped - will fall back to base64
+                console.log('[TreeNav] User skipped folder setup, using base64 fallback');
+            }
+        }
+
+        // Show loading state in editor
         editor.innerHTML = `
             <div class="mood-art-generating">
                 <h2>🎨 Generating Mood Art...</h2>
@@ -1372,14 +1437,21 @@ Write a clear, narrative summary of the story events in this specific part:`;
             const result = await this.app.imageService.generateChapterArt(chapterContent, chapter.title);
 
             // Save to global gallery (use styled prompt for "View Prompt" feature)
-            this.app.imageService.addToGallery(result.imageData, result.styledPrompt, {
+            // Note: addToGallery now saves to file automatically
+            const galleryItem = await this.app.imageService.addToGallery(result.imageData, result.styledPrompt, {
                 chapterId,
                 chapterTitle: chapter.title,
                 originalPrompt: result.prompt
             });
 
-            // Store mood art on chapter
-            chapter.moodArt = result;
+            // Store mood art on chapter - reuse the gallery item's file
+            chapter.moodArt = {
+                filename: galleryItem.filename || null,
+                imageData: galleryItem.filename ? null : result.imageData,
+                prompt: result.prompt,
+                styledPrompt: result.styledPrompt,
+                generatedAt: result.generatedAt
+            };
 
             this.app.save();
             this.render();
@@ -1408,6 +1480,10 @@ Write a clear, narrative summary of the story events in this specific part:`;
         const chapter = this.findChapter(chapterId, partId);
         if (chapter && chapter.moodArt) {
             if (confirm('Remove mood art from this chapter?')) {
+                // Delete file if file-based
+                if (chapter.moodArt.filename && this.app.fileStorage) {
+                    this.app.fileStorage.deleteImage(chapter.moodArt.filename).catch(() => { });
+                }
                 delete chapter.moodArt;
                 this.app.save();
                 this.render();
@@ -1434,16 +1510,17 @@ Write a clear, narrative summary of the story events in this specific part:`;
             grid.innerHTML = '';
         };
 
-        const renderGallery = () => {
+        const renderGallery = async () => {
             const galleryItems = this.app.imageService.getGallery();
             if (galleryItems.length === 0) {
                 grid.innerHTML = '<div class="gallery-empty">No images generated yet.</div>';
                 return;
             }
 
+            // Render placeholders first
             grid.innerHTML = galleryItems.map(item => `
                 <div class="gallery-item" data-id="${item.id}">
-                    <img src="${item.imageData}" alt="Mood Art" loading="lazy" class="gallery-img">
+                    <img src="" alt="Mood Art" loading="lazy" class="gallery-img" data-image-id="${item.id}" style="min-height: 100px; background: var(--bg-tertiary);">
                     <div class="gallery-item-info">
                         ${new Date(item.timestamp).toLocaleDateString()}
                     </div>
@@ -1455,16 +1532,34 @@ Write a clear, narrative summary of the story events in this specific part:`;
                 </div>
             `).join('');
 
+            // Load images async
+            for (const item of galleryItems) {
+                const imgEl = grid.querySelector(`img[data-image-id="${item.id}"]`);
+                if (imgEl) {
+                    try {
+                        const imageData = await this.app.imageService.loadGalleryImage(item);
+                        if (imageData) {
+                            imgEl.src = imageData;
+                        }
+                    } catch (err) {
+                        console.error('Failed to load gallery image:', err);
+                    }
+                }
+            }
+
             // Add click handlers for selection (on image)
             grid.querySelectorAll('.gallery-img').forEach(img => {
-                img.addEventListener('click', (e) => {
+                img.addEventListener('click', async (e) => {
                     const id = e.target.closest('.gallery-item').dataset.id;
                     const item = galleryItems.find(i => i.id === id);
                     if (item) {
+                        // Load the image data if needed
+                        const imageData = await this.app.imageService.loadGalleryImage(item);
                         chapter.moodArt = {
-                            imageData: item.imageData,
-                            prompt: item.meta?.originalPrompt || item.prompt, // fallback
-                            styledPrompt: item.prompt, // We stored full styled prompt here
+                            imageData: item.filename ? null : imageData, // Don't store base64 if file-based
+                            filename: item.filename || null,
+                            prompt: item.meta?.originalPrompt || item.prompt,
+                            styledPrompt: item.prompt,
                             generatedAt: item.timestamp
                         };
                         this.app.save();

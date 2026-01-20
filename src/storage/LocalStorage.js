@@ -170,7 +170,9 @@ export class Storage {
       worldInfo: { ...defaults.worldInfo, ...migrated.worldInfo },
       // AI Conversations
       conversations: migrated.conversations || defaults.conversations,
-      activeConversationId: migrated.activeConversationId || defaults.activeConversationId
+      activeConversationId: migrated.activeConversationId || defaults.activeConversationId,
+      // UI State (collapse, etc.)
+      ui: migrated.ui || { collapsedItems: [] }
     };
   }
 

@@ -266,13 +266,11 @@ export class Toolbar {
         const highlightPickerHtml = `
       <div class="toolbar-color-picker">
         <button class="toolbar-color-btn" id="btn-highlight-color" title="Highlight Color">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" style="margin-bottom:2px">
-            <path d="M12 19l7-7 3 3-7 7-3-3z"></path>
-            <path d="M18 13l-1.5-7.5L2 2l3.5 14.5L13 18l5-5z"></path>
-            <path d="M2 2l7.5 7.5"></path>
-            <path d="M2 2l13.5 13.5"></path>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-bottom:2px">
+            <rect x="3" y="3" width="18" height="18" rx="2" ry="2" fill="#ffffff" stroke="none"></rect>
+            <rect x="3" y="3" width="18" height="18" rx="2" ry="2" fill="none" stroke="currentColor"></rect>
           </svg>
-          <span class="color-bar" style="background: transparent;"></span>
+          <span class="color-bar" style="background: #ffffff;"></span>
         </button>
         <div class="color-picker-dropdown" id="highlight-dropdown">
           <div class="color-picker-grid">

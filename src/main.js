@@ -4,6 +4,7 @@
  */
 
 import { Storage } from './storage/LocalStorage.js';
+import { FileStorage } from './storage/FileStorage.js';
 import { BackupService } from './storage/BackupService.js';
 import { TreeNav } from './navigation/TreeNav.js';
 import { Toolbar } from './editor/Toolbar.js';
@@ -35,6 +36,7 @@ class NovelWriterApp {
     this.settings = new Settings(this);
     this.aiService = new AIService(this);
     this.imageService = new ImageService(this);
+    this.fileStorage = new FileStorage(this);  // External image storage
     this.apiConfig = new APIConfig(this);
     this.agentPanel = new AgentPanel(this);
     this.storyPulse = new StoryPulse(this);
@@ -643,10 +645,10 @@ class NovelWriterApp {
     const editor = document.getElementById('editor-content');
     if (!chapter.displayTitle) chapter.displayTitle = chapter.title;
 
-    // Build mood art section if exists
+    // Build mood art section if exists (image will be loaded async)
     const moodArtSection = chapter.moodArt ? `
       <div class="chapter-mood-art-display">
-        <img src="${chapter.moodArt.imageData}" alt="Chapter Mood Art" class="chapter-mood-art-image" />
+        <img src="" alt="Chapter Mood Art" class="chapter-mood-art-image" id="chapter-mood-art-img" style="min-height: 100px; background: var(--bg-tertiary);" />
         <div class="chapter-mood-art-caption">
           <span class="mood-art-label">🎨 Mood Art</span>
           <span class="mood-art-prompt-preview" title="${chapter.moodArt.prompt}">${chapter.moodArt.prompt?.substring(0, 60)}...</span>
@@ -678,6 +680,26 @@ class NovelWriterApp {
 
     html += `</div></div>`;
     editor.innerHTML = html;
+
+    // Load mood art image asynchronously if file-based
+    if (chapter.moodArt) {
+      const moodArtImg = document.getElementById('chapter-mood-art-img');
+      if (moodArtImg) {
+        (async () => {
+          let imageData = chapter.moodArt.imageData;
+          if (!imageData && chapter.moodArt.filename && this.fileStorage) {
+            try {
+              imageData = await this.fileStorage.loadImage(chapter.moodArt.filename);
+            } catch (err) {
+              console.error('Failed to load mood art:', err);
+            }
+          }
+          if (imageData) {
+            moodArtImg.src = imageData;
+          }
+        })();
+      }
+    }
 
     // Title input handler
     const titleInput = document.getElementById('edit-chapter-title');
