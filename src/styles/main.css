@@ -6395,6 +6395,465 @@ body.focus-mode #btn-focus-mode {
   animation: spin 1s linear infinite;
 }
 
+/* ========== CUSTOM MODE UI ========== */
+
+/* Mode Toggle */
+.mode-toggle {
+  display: flex;
+  background: rgba(30, 41, 59, 0.8);
+  border-radius: 20px;
+  padding: 4px;
+  gap: 4px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.mode-btn {
+  padding: 6px 14px;
+  border: none;
+  background: transparent;
+  color: #94a3b8;
+  font-size: 13px;
+  font-weight: 500;
+  border-radius: 16px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.mode-btn:hover {
+  color: #e2e8f0;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.mode-btn.active {
+  background: linear-gradient(135deg, #6366f1, #8b5cf6);
+  color: #fff;
+  box-shadow: 0 2px 8px rgba(99, 102, 241, 0.4);
+}
+
+/* Controls visibility */
+.ai-mode-controls,
+.custom-mode-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.hidden {
+  display: none !important;
+}
+
+/* Item Manager Dropdown */
+.item-manager-dropdown {
+  position: relative;
+}
+
+#btn-plot-lines {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+#current-plot-line-name {
+  max-width: 120px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.item-manager-menu {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  min-width: 220px;
+  background: rgba(15, 23, 42, 0.98);
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 12px;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5);
+  z-index: 1000;
+  overflow: hidden;
+}
+
+.item-manager-list {
+  max-height: 200px;
+  overflow-y: auto;
+}
+
+.item-manager-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 14px;
+  cursor: pointer;
+  transition: background 0.15s;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.item-manager-item:hover {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.item-manager-item.active {
+  background: rgba(99, 102, 241, 0.2);
+}
+
+.item-manager-item.active .item-name {
+  color: #a5b4fc;
+  font-weight: 600;
+}
+
+.item-name {
+  color: #e2e8f0;
+  font-size: 13px;
+}
+
+.item-actions {
+  display: flex;
+  gap: 4px;
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+
+.item-manager-item:hover .item-actions {
+  opacity: 1;
+}
+
+.item-rename-btn,
+.item-delete-btn {
+  background: transparent;
+  border: none;
+  padding: 4px;
+  cursor: pointer;
+  font-size: 12px;
+  opacity: 0.7;
+  transition: opacity 0.15s;
+}
+
+.item-rename-btn:hover,
+.item-delete-btn:hover {
+  opacity: 1;
+}
+
+.item-manager-actions {
+  padding: 8px;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.item-action-btn {
+  width: 100%;
+  padding: 8px 12px;
+  background: rgba(99, 102, 241, 0.2);
+  border: 1px solid rgba(99, 102, 241, 0.3);
+  border-radius: 8px;
+  color: #a5b4fc;
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.item-action-btn:hover {
+  background: rgba(99, 102, 241, 0.3);
+  border-color: rgba(99, 102, 241, 0.5);
+}
+
+/* Add Event Popup */
+.add-event-popup {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.7);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 500;
+}
+
+.add-event-form {
+  background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 16px;
+  padding: 24px;
+  width: 380px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+}
+
+.add-event-form h3 {
+  margin: 0 0 20px;
+  color: #f1f5f9;
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.add-event-form .form-group {
+  margin-bottom: 16px;
+}
+
+.add-event-form label {
+  display: block;
+  margin-bottom: 6px;
+  color: #94a3b8;
+  font-size: 12px;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.add-event-form .required {
+  color: #ef4444;
+}
+
+.add-event-form select,
+.add-event-form input,
+.add-event-form textarea {
+  width: 100%;
+  padding: 10px 14px;
+  background: rgba(15, 23, 42, 0.8);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  color: #e2e8f0;
+  font-size: 14px;
+  transition: border-color 0.15s;
+  box-sizing: border-box;
+}
+
+.add-event-form select:focus,
+.add-event-form input:focus,
+.add-event-form textarea:focus {
+  outline: none;
+  border-color: #6366f1;
+}
+
+.add-event-form textarea {
+  resize: vertical;
+  min-height: 80px;
+}
+
+.add-event-form .form-actions {
+  display: flex;
+  gap: 12px;
+  justify-content: flex-end;
+  margin-top: 20px;
+}
+
+/* Event Delete Button */
+.event-delete-btn {
+  position: absolute;
+  top: -8px;
+  right: -8px;
+  width: 22px;
+  height: 22px;
+  background: rgba(239, 68, 68, 0.9);
+  border: 2px solid #1e293b;
+  border-radius: 50%;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transition: all 0.15s ease;
+  z-index: 50;
+}
+
+.event-delete-btn svg {
+  color: #fff;
+}
+
+.event-node:hover .event-delete-btn {
+  opacity: 1;
+}
+
+.event-delete-btn:hover {
+  background: #ef4444;
+  transform: scale(1.1);
+}
+
+/* None type (white) */
+.type-none {
+  --type-color: #ffffff;
+  --type-glow: rgba(255, 255, 255, 0.4);
+}
+
+/* ========== PLOT TRACKER CUSTOM MODE ========== */
+
+/* Add Card Popup (reuses add-event-popup styling) */
+.add-card-popup {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.7);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 500;
+}
+
+.add-card-form {
+  background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 16px;
+  padding: 24px;
+  width: 400px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+}
+
+.add-card-form h3 {
+  margin: 0 0 20px;
+  color: #f1f5f9;
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.add-card-form .form-group {
+  margin-bottom: 16px;
+}
+
+.add-card-form label {
+  display: block;
+  margin-bottom: 6px;
+  color: #94a3b8;
+  font-size: 12px;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.add-card-form .required {
+  color: #ef4444;
+}
+
+.add-card-form input,
+.add-card-form textarea {
+  width: 100%;
+  padding: 10px 14px;
+  background: rgba(15, 23, 42, 0.8);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  color: #e2e8f0;
+  font-size: 14px;
+  transition: border-color 0.15s;
+  box-sizing: border-box;
+}
+
+.add-card-form input:focus,
+.add-card-form textarea:focus {
+  outline: none;
+  border-color: #6366f1;
+}
+
+.add-card-form textarea {
+  resize: vertical;
+  min-height: 80px;
+}
+
+.add-card-form .form-actions {
+  display: flex;
+  gap: 12px;
+  justify-content: flex-end;
+  margin-top: 20px;
+}
+
+/* Severity Slider */
+.severity-group label {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.severity-group input[type="range"] {
+  width: 100%;
+  height: 8px;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 4px;
+  outline: none;
+  appearance: none;
+  -webkit-appearance: none;
+  margin-top: 8px;
+}
+
+.severity-group input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 20px;
+  height: 20px;
+  background: linear-gradient(135deg, #ef4444, #f97316);
+  border-radius: 50%;
+  cursor: pointer;
+  box-shadow: 0 2px 8px rgba(239, 68, 68, 0.4);
+}
+
+.severity-group input[type="range"]::-moz-range-thumb {
+  width: 20px;
+  height: 20px;
+  background: linear-gradient(135deg, #ef4444, #f97316);
+  border-radius: 50%;
+  cursor: pointer;
+  border: none;
+}
+
+/* Section Add Button */
+.add-card-btn {
+  width: 24px;
+  height: 24px;
+  background: rgba(99, 102, 241, 0.3);
+  border: 1px solid rgba(99, 102, 241, 0.5);
+  border-radius: 6px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s ease;
+  margin-left: auto;
+  margin-right: 8px;
+}
+
+.add-card-btn svg {
+  color: #a5b4fc;
+}
+
+.add-card-btn:hover {
+  background: rgba(99, 102, 241, 0.5);
+  transform: scale(1.1);
+}
+
+/* Plot Card Delete Button */
+.plot-card {
+  position: relative;
+}
+
+.plot-card-delete {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  width: 24px;
+  height: 24px;
+  background: rgba(239, 68, 68, 0.2);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  border-radius: 6px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transition: all 0.15s ease;
+}
+
+.plot-card-delete svg {
+  color: #fca5a5;
+}
+
+.plot-card:hover .plot-card-delete {
+  opacity: 1;
+}
+
+.plot-card-delete:hover {
+  background: rgba(239, 68, 68, 0.4);
+  border-color: rgba(239, 68, 68, 0.6);
+}
+
+/* Custom Mode Hint */
+.custom-mode-hint {
+  color: #64748b;
+  font-size: 12px;
+  font-style: italic;
+}
+
 /* ========== BACKUP TOAST ========== */
 .backup-toast {
   position: fixed;
@@ -6660,4 +7119,111 @@ body.focus-mode #btn-focus-mode {
 
 .plot-section.plot-holes .plot-section-title {
   color: #f87171;
+}
+
+/* ========== ITEM MANAGER DROPDOWN (Generic) ========== */
+.item-manager-dropdown {
+  position: relative;
+  display: inline-block;
+}
+
+.item-manager-menu {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  width: 200px;
+  background: #1e293b;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
+  z-index: 1000;
+  /* Ensure it's above other elements */
+  padding: 8px;
+  margin-top: 8px;
+}
+
+.item-manager-list {
+  max-height: 200px;
+  overflow-y: auto;
+  margin-bottom: 8px;
+}
+
+.item-manager-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 10px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.item-manager-item:hover {
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.item-manager-item.active {
+  background: rgba(99, 102, 241, 0.2);
+  color: #a5b4fc;
+}
+
+.item-name {
+  font-size: 13px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.item-actions {
+  display: flex;
+  gap: 4px;
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+
+.item-manager-item:hover .item-actions {
+  opacity: 1;
+}
+
+.item-rename-btn,
+.item-delete-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 2px;
+  opacity: 0.6;
+  transition: opacity 0.15s;
+}
+
+.item-rename-btn:hover,
+.item-delete-btn:hover {
+  opacity: 1;
+}
+
+.item-manager-actions {
+  padding-top: 8px;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.item-action-btn {
+  width: 100%;
+  padding: 6px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 6px;
+  color: #94a3b8;
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.item-action-btn:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: #fff;
+}
+
+/* Fix for Webs dropdown cutoff - Align left since it's on the left side of toolbar */
+#webs-menu {
+  left: 0;
+  right: auto;
 }

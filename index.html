@@ -325,12 +325,47 @@
       <div class="fullscreen-modal-header">
         <h2>📊 Event Line</h2>
         <div class="fullscreen-modal-controls">
-          <button class="btn btn-sm" id="btn-generate-events">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <path d="M21.5 2v6h-6M2.5 22v-6h6M2 11.5a10 10 0 0 1 18.8-4.3M22 12.5a10 10 0 0 1-18.8 4.2" />
-            </svg>
-            Generate / Update
-          </button>
+          <!-- Mode Toggle -->
+          <div class="mode-toggle" id="event-line-mode-toggle">
+            <button class="mode-btn active" data-mode="ai">🤖 AI</button>
+            <button class="mode-btn" data-mode="custom">✏️ Custom</button>
+          </div>
+          <!-- AI Mode Controls -->
+          <div class="ai-mode-controls" id="event-line-ai-controls">
+            <button class="btn btn-sm" id="btn-generate-events">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M21.5 2v6h-6M2.5 22v-6h6M2 11.5a10 10 0 0 1 18.8-4.3M22 12.5a10 10 0 0 1-18.8 4.2" />
+              </svg>
+              Generate / Update
+            </button>
+          </div>
+          <!-- Custom Mode Controls -->
+          <div class="custom-mode-controls hidden" id="event-line-custom-controls">
+            <button class="btn btn-sm btn-primary" id="btn-add-event">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <line x1="12" y1="5" x2="12" y2="19" />
+                <line x1="5" y1="12" x2="19" y2="12" />
+              </svg>
+              Add Event
+            </button>
+            <div class="item-manager-dropdown" id="plot-lines-dropdown">
+              <button class="btn btn-sm" id="btn-plot-lines">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />
+                </svg>
+                <span id="current-plot-line-name">Main Plot</span>
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <polyline points="6 9 12 15 18 9" />
+                </svg>
+              </button>
+              <div class="item-manager-menu hidden" id="plot-lines-menu">
+                <div class="item-manager-list" id="plot-lines-list"></div>
+                <div class="item-manager-actions">
+                  <button class="item-action-btn" id="btn-new-plot-line">+ New Plot Line</button>
+                </div>
+              </div>
+            </div>
+          </div>
           <button class="icon-btn" id="close-event-line" title="Close">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <line x1="18" y1="6" x2="6" y2="18" />
@@ -345,6 +380,53 @@
           <p>Click <strong>Generate / Update</strong> to scan your manuscript and build the event line.</p>
         </div>
       </div>
+      <!-- Add Event Popup -->
+      <div class="add-event-popup hidden" id="add-event-popup">
+        <div class="add-event-form">
+          <h3>Add Event</h3>
+          <div class="form-group">
+            <label>Event Type</label>
+            <select id="add-event-type">
+              <option value="none">⚪ None (White)</option>
+              <option value="action">⚔️ Action</option>
+              <option value="conflict">💢 Conflict</option>
+              <option value="chase">🏃 Chase</option>
+              <option value="reveal">💡 Reveal</option>
+              <option value="mystery">🔍 Mystery</option>
+              <option value="decision">⚖️ Decision</option>
+              <option value="betrayal">🗡️ Betrayal</option>
+              <option value="death">💀 Death</option>
+              <option value="victory">🏆 Victory</option>
+              <option value="defeat">💥 Defeat</option>
+              <option value="emotional">💔 Emotional</option>
+              <option value="calm">🌿 Calm</option>
+              <option value="setup">📍 Setup</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Gap After Last Event</label>
+            <select id="add-event-gap">
+              <option value="immediate">Immediate</option>
+              <option value="soon" selected>Shortly After</option>
+              <option value="later">Some Time Later</option>
+              <option value="skip">Time Skip</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Title <span class="required">*</span></label>
+            <input type="text" id="add-event-title" placeholder="Brief event title..." maxlength="50">
+          </div>
+          <div class="form-group">
+            <label>Description</label>
+            <textarea id="add-event-description" placeholder="What happens in this event..." rows="3"
+              maxlength="200"></textarea>
+          </div>
+          <div class="form-actions">
+            <button class="btn btn-sm" id="btn-cancel-add-event">Cancel</button>
+            <button class="btn btn-sm btn-primary" id="btn-save-event">Save Event</button>
+          </div>
+        </div>
+      </div>
     </div>
 
     <!-- Plot Tracker Modal (Fullscreen) -->
@@ -352,12 +434,24 @@
       <div class="fullscreen-modal-header">
         <h2>🔍 Plot Tracker</h2>
         <div class="fullscreen-modal-controls">
-          <button class="btn btn-sm" id="btn-scan-plots">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <path d="M21.5 2v6h-6M2.5 22v-6h6M2 11.5a10 10 0 0 1 18.8-4.3M22 12.5a10 10 0 0 1-18.8 4.2" />
-            </svg>
-            Scan Manuscript
-          </button>
+          <!-- Mode Toggle -->
+          <div class="mode-toggle" id="plot-tracker-mode-toggle">
+            <button class="mode-btn active" data-mode="ai">🤖 AI</button>
+            <button class="mode-btn" data-mode="custom">✏️ Custom</button>
+          </div>
+          <!-- AI Mode Controls -->
+          <div class="ai-mode-controls" id="plot-tracker-ai-controls">
+            <button class="btn btn-sm" id="btn-scan-plots">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M21.5 2v6h-6M2.5 22v-6h6M2 11.5a10 10 0 0 1 18.8-4.3M22 12.5a10 10 0 0 1-18.8 4.2" />
+              </svg>
+              Scan Manuscript
+            </button>
+          </div>
+          <!-- Custom Mode Controls (shown in section headers instead) -->
+          <div class="custom-mode-controls hidden" id="plot-tracker-custom-controls">
+            <span class="custom-mode-hint">Add cards using + buttons in each section</span>
+          </div>
           <button class="icon-btn" id="close-plot-tracker" title="Close">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <line x1="18" y1="6" x2="6" y2="18" />
@@ -370,6 +464,32 @@
         <div class="plot-tracker-empty">
           <p>No plot analysis yet.</p>
           <p>Click <strong>Scan Manuscript</strong> to analyze your story for plot lines and potential holes.</p>
+        </div>
+      </div>
+      <!-- Add Card Popup -->
+      <div class="add-card-popup hidden" id="add-card-popup">
+        <div class="add-card-form">
+          <h3 id="add-card-title">Add Card</h3>
+          <div class="form-group">
+            <label>Title <span class="required">*</span></label>
+            <input type="text" id="card-title" placeholder="Brief title..." maxlength="100">
+          </div>
+          <div class="form-group">
+            <label>Location</label>
+            <input type="text" id="card-location" placeholder="e.g. Part 1 - Chapter 3" maxlength="50">
+          </div>
+          <div class="form-group">
+            <label>Description</label>
+            <textarea id="card-description" placeholder="Details..." rows="3" maxlength="500"></textarea>
+          </div>
+          <div class="form-group severity-group hidden" id="severity-group">
+            <label>Severity: <span id="severity-value">5</span>/10</label>
+            <input type="range" id="card-severity" min="1" max="10" value="5">
+          </div>
+          <div class="form-actions">
+            <button class="btn btn-sm" id="btn-cancel-add-card">Cancel</button>
+            <button class="btn btn-sm btn-primary" id="btn-save-card">Save Card</button>
+          </div>
         </div>
       </div>
     </div>
@@ -807,23 +927,57 @@
     <div class="modal-content connection-web-content">
       <div class="modal-header">
         <h2>🕸️ Connection Web</h2>
-        <button class="icon-btn" id="close-connection-web">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <line x1="18" y1="6" x2="6" y2="18"></line>
-            <line x1="6" y1="6" x2="18" y2="18"></line>
-          </svg>
-        </button>
+        <div class="connection-web-controls-right">
+          <!-- Mode Toggle -->
+          <div class="mode-toggle" id="connection-web-mode-toggle">
+            <button class="mode-btn active" data-mode="ai">🤖 AI</button>
+            <button class="mode-btn" data-mode="custom">✏️ Custom</button>
+          </div>
+          <button class="icon-btn" id="close-connection-web">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <line x1="18" y1="6" x2="6" y2="18"></line>
+              <line x1="6" y1="6" x2="18" y2="18"></line>
+            </svg>
+          </button>
+        </div>
       </div>
       <div class="modal-body connection-web-body">
         <div class="connection-web-toolbar">
-          <button class="btn btn-primary" id="btn-generate-web">
-            <span class="btn-icon">✨</span>
-            <span id="generate-web-text">Generate Web</span>
-          </button>
-          <button class="btn btn-secondary" id="btn-add-node" disabled>
+          <!-- AI Mode Controls -->
+          <div class="ai-mode-controls" id="connection-web-ai-controls">
+            <button class="btn btn-primary" id="btn-generate-web">
+              <span class="btn-icon">✨</span>
+              <span id="generate-web-text">Generate Web</span>
+            </button>
+          </div>
+          <!-- Custom Mode Controls -->
+          <div class="custom-mode-controls hidden" id="connection-web-custom-controls">
+            <div class="item-manager-dropdown" id="webs-dropdown">
+              <button class="btn btn-sm" id="btn-webs">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <circle cx="12" cy="12" r="10"></circle>
+                  <line x1="2" y1="12" x2="22" y2="12"></line>
+                  <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z">
+                  </path>
+                </svg>
+                <span id="current-web-name">Main Web</span>
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <polyline points="6 9 12 15 18 9" />
+                </svg>
+              </button>
+              <div class="item-manager-menu hidden" id="webs-menu">
+                <div class="item-manager-list" id="webs-list"></div>
+                <div class="item-manager-actions">
+                  <button class="item-action-btn" id="btn-new-web">+ New Web</button>
+                </div>
+              </div>
+            </div>
+          </div>
+          <!-- Shared Controls -->
+          <button class="btn btn-secondary" id="btn-add-node" title="Add Node">
             <span class="btn-icon">➕</span> Add Node
           </button>
-          <button class="btn btn-secondary" id="btn-add-edge" disabled>
+          <button class="btn btn-secondary" id="btn-add-edge" title="Link Nodes">
             <span class="btn-icon">🔗</span> Link Nodes
           </button>
           <div class="connection-web-zoom">

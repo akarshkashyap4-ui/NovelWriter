@@ -1,6 +1,6 @@
 /**
- * ConnectionWeb - AI-powered relationship graph visualization
- * Phase 8: Connection Web feature
+ * ConnectionWeb - AI-powered and Custom relationship graph visualization
+ * Phase 8 + Phase 14: Custom Mode
  */
 
 import { stripContent } from '../utils/TextUtils.js';
@@ -92,16 +92,32 @@ export class ConnectionWeb {
         this.isGenerating = false;
         this.cy = null; // Cytoscape instance
         this.selectedElement = null;
+        this.mode = 'ai'; // 'ai' or 'custom'
+        this.currentWebName = 'Main Web';
 
         // UI Elements
         this.modal = document.getElementById('connection-web-modal');
         this.canvas = document.getElementById('connection-web-canvas');
         this.inspector = document.getElementById('inspector-content');
+
+        // Controls
+        this.modeToggle = document.getElementById('connection-web-mode-toggle');
+        this.aiControls = document.getElementById('connection-web-ai-controls');
+        this.customControls = document.getElementById('connection-web-custom-controls');
+
         this.generateBtn = document.getElementById('btn-generate-web');
         this.generateText = document.getElementById('generate-web-text');
         this.zoomLevel = document.getElementById('zoom-level');
 
+        // Webs dropdown
+        this.websBtn = document.getElementById('btn-webs');
+        this.websMenu = document.getElementById('webs-menu');
+        this.websList = document.getElementById('webs-list');
+        this.currentWebNameEl = document.getElementById('current-web-name');
+        this.newWebBtn = document.getElementById('btn-new-web');
+
         this.bindEvents();
+        this.initCustomData();
         this.loadCytoscape();
     }
 
@@ -111,9 +127,27 @@ export class ConnectionWeb {
         document.getElementById('close-connection-web')?.addEventListener('click', () => this.close());
         document.getElementById('connection-web-backdrop')?.addEventListener('click', () => this.close());
 
+        // Mode toggle
+        this.modeToggle?.querySelectorAll('.mode-btn').forEach(btn => {
+            btn.addEventListener('click', () => this.setMode(btn.dataset.mode));
+        });
+
+        // Webs Dropdown
+        this.websBtn?.addEventListener('click', (e) => {
+            e.stopPropagation();
+            this.toggleWebsMenu();
+        });
+        this.newWebBtn?.addEventListener('click', () => this.createNewWeb());
+
+        // Close menus on outside click
+        document.addEventListener('click', (e) => {
+            if (!e.target.closest('#webs-dropdown')) {
+                this.websMenu?.classList.add('hidden');
+            }
+        });
+
         // Toolbar
         this.generateBtn?.addEventListener('click', () => this.generate());
-        document.getElementById('btn-add-node')?.addEventListener('click', () => this.addNodeManual());
         document.getElementById('btn-add-node')?.addEventListener('click', () => this.addNodeManual());
         document.getElementById('btn-add-edge')?.addEventListener('click', () => this.toggleLinkingMode());
         document.getElementById('btn-zoom-in')?.addEventListener('click', () => this.zoom(1.2));
@@ -136,12 +170,58 @@ export class ConnectionWeb {
         }
     }
 
+    initCustomData() {
+        if (!this.app.state.customConnectionWebs) {
+            this.app.state.customConnectionWebs = {
+                'Main Web': { nodes: [], edges: [] }
+            };
+        }
+    }
+
     initGraph() {
-        // Only initialize if we have data
-        const webData = this.app.state.connectionWeb;
+        // Only initialize if we have data for current mode
+        const webData = this.getCurrentWebData();
         if (webData && webData.nodes && webData.nodes.length > 0) {
             this.renderGraph();
         }
+    }
+
+    getCurrentWebData() {
+        if (this.mode === 'ai') {
+            return this.app.state.connectionWeb;
+        } else {
+            return this.app.state.customConnectionWebs?.[this.currentWebName];
+        }
+    }
+
+    // ===== MODE SWITCHING =====
+
+    setMode(mode) {
+        this.mode = mode;
+
+        // Update toggle buttons
+        this.modeToggle?.querySelectorAll('.mode-btn').forEach(btn => {
+            btn.classList.toggle('active', btn.dataset.mode === mode);
+        });
+
+        // Show/hide controls
+        if (mode === 'ai') {
+            this.aiControls?.classList.remove('hidden');
+            this.customControls?.classList.add('hidden');
+        } else {
+            this.aiControls?.classList.add('hidden');
+            this.customControls?.classList.remove('hidden');
+            this.updateWebNameDisplay();
+        }
+
+        // Always enable add buttons in custom mode, or if data exists in AI mode
+        const hasData = this.getCurrentWebData()?.nodes?.length > 0;
+        const enableButtons = mode === 'custom' || hasData;
+
+        document.getElementById('btn-add-node').disabled = !enableButtons;
+        document.getElementById('btn-add-edge').disabled = !enableButtons;
+
+        this.renderGraph();
     }
 
     // ===== MODAL CONTROLS =====
@@ -149,29 +229,33 @@ export class ConnectionWeb {
     open() {
         if (!this.modal) return;
         this.modal.classList.add('open');
-
-        // Render existing graph if available
-        if (this.app.state.connectionWeb?.nodes?.length > 0) {
-            this.renderGraph();
-            this.updateGenerateButton(false);
-            document.getElementById('btn-add-node').disabled = false;
-            document.getElementById('btn-add-edge').disabled = false;
-        }
+        this.renderGraph();
     }
 
     close() {
         this.modal?.classList.remove('open');
+        this.websMenu?.classList.add('hidden');
     }
 
     // ===== GRAPH RENDERING =====
 
     renderGraph() {
-        const webData = this.app.state.connectionWeb;
-        if (!webData || !this.canvas) return;
+        if (!this.canvas) return;
+        const webData = this.getCurrentWebData();
 
-        // Clear placeholder
+        // Clear placeholder if data exists
         const placeholder = this.canvas.querySelector('.connection-web-placeholder');
-        if (placeholder) placeholder.style.display = 'none';
+        if (placeholder) {
+            placeholder.style.display = (webData && webData.nodes && webData.nodes.length > 0) ? 'none' : 'flex';
+        }
+
+        if (!webData || !webData.nodes || webData.nodes.length === 0) {
+            if (this.cy) {
+                this.cy.destroy();
+                this.cy = null;
+            }
+            return;
+        }
 
         // Convert data to Cytoscape format
         const elements = [];
@@ -208,13 +292,16 @@ export class ConnectionWeb {
 
         // Initialize Cytoscape
         if (typeof cytoscape !== 'undefined') {
+            // Destroy existing instance to prevent issues
+            if (this.cy) this.cy.destroy();
+
             this.cy = cytoscape({
                 container: this.canvas,
                 elements: elements,
                 style: this.getGraphStyle(),
                 layout: {
                     name: hasPositions ? 'preset' : 'cose',
-                    animate: !hasPositions, // Only animate if arranging for first time
+                    animate: !hasPositions,
                     animationDuration: 1000,
                     nodeRepulsion: 50000,
                     idealEdgeLength: 200,
@@ -252,11 +339,39 @@ export class ConnectionWeb {
                 this.cy.elements().removeClass('dimmed');
             });
 
-            this.cy.on('zoom', () => this.updateZoomLevel());
+            this.cy.on('zoom', () => {
+                this.updateZoomLevel();
+                this.saveViewState();
+            });
+            this.cy.on('pan', () => {
+                this.saveViewState();
+            });
             this.cy.on('dragfree', 'node', (e) => this.onNodeDragged(e.target));
 
             this.updateZoomLevel();
+
+            // Restore view state if available
+            const viewState = this.app.state.connectionWebViewState;
+            if (viewState) {
+                this.cy.zoom(viewState.zoom);
+                this.cy.pan(viewState.pan);
+                this.updateZoomLevel();
+            }
         }
+    }
+
+    saveViewState() {
+        if (!this.cy) return;
+        this.app.state.connectionWebViewState = {
+            zoom: this.cy.zoom(),
+            pan: this.cy.pan()
+        };
+
+        // Debounce disk save to avoid performance issues during active panning
+        if (this._saveTimeout) clearTimeout(this._saveTimeout);
+        this._saveTimeout = setTimeout(() => {
+            this.app.save();
+        }, 500);
     }
 
     getGraphStyle() {
@@ -354,6 +469,133 @@ export class ConnectionWeb {
         ];
     }
 
+    // ===== WEBS MANAGEMENT (CUSTOM MODE) =====
+
+    toggleWebsMenu() {
+        this.websMenu?.classList.toggle('hidden');
+        if (!this.websMenu?.classList.contains('hidden')) {
+            this.renderWebsList();
+        }
+    }
+
+    renderWebsList() {
+        if (!this.websList) return;
+
+        const webs = Object.keys(this.app.state.customConnectionWebs || {});
+        let html = '';
+
+        webs.forEach(name => {
+            const isActive = name === this.currentWebName;
+            html += `
+                <div class="item-manager-item ${isActive ? 'active' : ''}" data-name="${name}">
+                    <span class="item-name">${name}</span>
+                    <div class="item-actions">
+                        <button class="item-rename-btn" title="Rename" data-name="${name}">✏️</button>
+                        ${webs.length > 1 ? `<button class="item-delete-btn" title="Delete" data-name="${name}">🗑️</button>` : ''}
+                    </div>
+                </div>
+            `;
+        });
+
+        this.websList.innerHTML = html;
+
+        // Add click handlers
+        this.websList.querySelectorAll('.item-manager-item').forEach(item => {
+            item.addEventListener('click', (e) => {
+                if (!e.target.closest('.item-actions')) {
+                    this.switchWeb(item.dataset.name);
+                }
+            });
+        });
+
+        this.websList.querySelectorAll('.item-rename-btn').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                this.renameWeb(btn.dataset.name);
+            });
+        });
+
+        this.websList.querySelectorAll('.item-delete-btn').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                this.deleteWeb(btn.dataset.name);
+            });
+        });
+    }
+
+    updateWebNameDisplay() {
+        if (this.currentWebNameEl) {
+            this.currentWebNameEl.textContent = this.currentWebName;
+        }
+    }
+
+    switchWeb(name) {
+        this.currentWebName = name;
+        this.updateWebNameDisplay();
+        this.websMenu?.classList.add('hidden');
+        this.renderGraph();
+    }
+
+    createNewWeb() {
+        const name = prompt('Enter name for new connection web:');
+        if (!name?.trim()) return;
+
+        const trimmedName = name.trim();
+        if (this.app.state.customConnectionWebs[trimmedName]) {
+            alert('A web with this name already exists.');
+            return;
+        }
+
+        this.app.state.customConnectionWebs[trimmedName] = { nodes: [], edges: [] };
+        this.currentWebName = trimmedName;
+        this.app.save();
+        this.updateWebNameDisplay();
+        this.websMenu?.classList.add('hidden');
+        this.renderGraph();
+    }
+
+    renameWeb(oldName) {
+        const newName = prompt('Enter new name:', oldName);
+        if (!newName?.trim() || newName.trim() === oldName) return;
+
+        const trimmedName = newName.trim();
+        if (this.app.state.customConnectionWebs[trimmedName]) {
+            alert('A web with this name already exists.');
+            return;
+        }
+
+        this.app.state.customConnectionWebs[trimmedName] = this.app.state.customConnectionWebs[oldName];
+        delete this.app.state.customConnectionWebs[oldName];
+
+        if (this.currentWebName === oldName) {
+            this.currentWebName = trimmedName;
+        }
+
+        this.app.save();
+        this.updateWebNameDisplay();
+        this.renderWebsList();
+        this.renderGraph();
+    }
+
+    deleteWeb(name) {
+        if (!confirm(`Delete web "${name}" and all its data?`)) return;
+
+        delete this.app.state.customConnectionWebs[name];
+
+        if (this.currentWebName === name) {
+            const remaining = Object.keys(this.app.state.customConnectionWebs);
+            this.currentWebName = remaining[0] || 'Main Web';
+            if (remaining.length === 0) {
+                this.app.state.customConnectionWebs['Main Web'] = { nodes: [], edges: [] };
+            }
+        }
+
+        this.app.save();
+        this.updateWebNameDisplay();
+        this.renderWebsList();
+        this.renderGraph();
+    }
+
     // ===== INTERACTION =====
 
     selectNode(node) {
@@ -383,7 +625,7 @@ export class ConnectionWeb {
                 <div class="inspector-node">
                     <div class="inspector-row">
                         <label>Type</label>
-                        <span class="inspector-badge" style="background: ${this.NODE_COLORS[data.type]}">${data.type}</span>
+                        <span class="inspector-badge" style="background: ${this.NODE_COLORS[data.type] || '#888'}">${data.type}</span>
                     </div>
                     <div class="inspector-row">
                         <label>Name</label>
@@ -407,7 +649,7 @@ export class ConnectionWeb {
                     </div>
                     <div class="inspector-row">
                         <label>Type</label>
-                        <span class="inspector-badge" style="background: ${this.EDGE_COLORS[data.category]}">${data.category}</span>
+                        <span class="inspector-badge" style="background: ${this.EDGE_COLORS[data.category] || '#888'}">${data.category}</span>
                     </div>
                     <div class="inspector-row">
                         <label>Label</label>
@@ -426,7 +668,8 @@ export class ConnectionWeb {
     }
 
     getNodeLabel(nodeId) {
-        const node = this.app.state.connectionWeb?.nodes?.find(n => n.id === nodeId);
+        const webData = this.getCurrentWebData();
+        const node = webData?.nodes?.find(n => n.id === nodeId);
         return node?.label || nodeId;
     }
 
@@ -436,7 +679,8 @@ export class ConnectionWeb {
         const newLabel = document.getElementById('inspector-name')?.value;
         if (!newLabel) return;
 
-        const node = this.app.state.connectionWeb?.nodes?.find(n => n.id === nodeId);
+        const webData = this.getCurrentWebData();
+        const node = webData?.nodes?.find(n => n.id === nodeId);
         if (node) {
             node.label = newLabel;
             this.cy?.getElementById(nodeId).data('label', newLabel);
@@ -448,7 +692,8 @@ export class ConnectionWeb {
         const newLabel = document.getElementById('inspector-label')?.value;
         if (!newLabel) return;
 
-        const edge = this.app.state.connectionWeb?.edges?.find(e => e.id === edgeId);
+        const webData = this.getCurrentWebData();
+        const edge = webData?.edges?.find(e => e.id === edgeId);
         if (edge) {
             edge.label = newLabel;
             this.cy?.getElementById(edgeId).data('label', newLabel);
@@ -459,7 +704,7 @@ export class ConnectionWeb {
     deleteNode(nodeId) {
         if (!confirm('Delete this node and all its connections?')) return;
 
-        const webData = this.app.state.connectionWeb;
+        const webData = this.getCurrentWebData();
         if (!webData) return;
 
         // Remove node
@@ -475,7 +720,7 @@ export class ConnectionWeb {
     deleteEdge(edgeId) {
         if (!confirm('Delete this connection?')) return;
 
-        const webData = this.app.state.connectionWeb;
+        const webData = this.getCurrentWebData();
         if (!webData) return;
 
         webData.edges = webData.edges.filter(e => e.id !== edgeId);
@@ -485,7 +730,8 @@ export class ConnectionWeb {
     }
 
     onNodeDragged(node) {
-        const nodeData = this.app.state.connectionWeb?.nodes?.find(n => n.id === node.id());
+        const webData = this.getCurrentWebData();
+        const nodeData = webData?.nodes?.find(n => n.id === node.id());
         if (nodeData) {
             const pos = node.position();
             nodeData.x = pos.x;
@@ -523,7 +769,7 @@ export class ConnectionWeb {
     // ===== AI GENERATION =====
 
     async generate() {
-        if (this.isGenerating) return;
+        if (this.isGenerating || this.mode !== 'ai') return;
 
         this.isGenerating = true;
         this.updateGenerateButton(true);
@@ -533,15 +779,19 @@ export class ConnectionWeb {
             const context = this.buildContext();
             const prompt = this.buildPrompt(context);
 
-            const response = await this.app.aiService.sendAliveRequest(
-                prompt,
-                'You are an expert at analyzing narratives and extracting relationship graphs. Return only valid JSON.'
+            let fullResponse = '';
+            await this.app.aiService.sendMessageStream(
+                [
+                    { role: 'system', content: 'You are an expert at analyzing narratives and extracting relationship graphs. Return only valid JSON.' },
+                    { role: 'user', content: prompt }
+                ],
+                (chunk, accumulated) => {
+                    fullResponse = accumulated;
+                }
             );
 
-            console.log('Connection Web response:', response);
-
             // Parse response
-            const graphData = this.parseResponse(response);
+            const graphData = this.parseResponse(fullResponse);
 
             if (graphData) {
                 // Save to state
@@ -618,20 +868,6 @@ export class ConnectionWeb {
             });
         }
 
-        if (worldInfo.lore?.length > 0) {
-            worldInfoText += '\n=== LORE (Factions, History, etc.) ===\n';
-            worldInfo.lore.forEach(item => {
-                worldInfoText += `- ${item.name}: ${item.description || ''}\n`;
-            });
-        }
-
-        if (worldInfo.items?.length > 0) {
-            worldInfoText += '\n=== ITEMS ===\n';
-            worldInfo.items.forEach(item => {
-                worldInfoText += `- ${item.name}: ${item.description || ''}\n`;
-            });
-        }
-
         return { manuscriptText, worldInfoText };
     }
 
@@ -639,7 +875,7 @@ export class ConnectionWeb {
         return `Analyze the following manuscript and world information to extract a relationship graph.
 
 === MANUSCRIPT ===
-${context.manuscriptText}
+${context.manuscriptText.substring(0, 50000)}
 
 === WORLD INFORMATION ===
 ${context.worldInfoText}
@@ -733,13 +969,74 @@ Return ONLY the JSON object, no other text.`;
     // ===== MANUAL ADD =====
 
     addNodeManual() {
-        const label = prompt('Enter node name:');
-        if (!label) return;
+        // Show form in inspector instead of prompt
+        if (!this.inspector) return;
 
-        const type = prompt('Enter type (character, faction, location, plotPoint, item):', 'character');
-        if (!type) return;
+        this.clearSelection();
+        this.inspector.innerHTML = `
+            <div class="inspector-node-form">
+                <h4>Add New Node</h4>
+                <div class="inspector-row">
+                    <label>Name</label>
+                    <input type="text" id="new-node-label" placeholder="e.g. Hero Name" />
+                </div>
+                <div class="inspector-row">
+                    <label>Type</label>
+                    <select id="new-node-type">
+                        <option value="character" selected>Character</option>
+                        <option value="faction">Faction</option>
+                        <option value="location">Location</option>
+                        <option value="plotPoint">Plot Point</option>
+                        <option value="item">Item</option>
+                        <option value="other">Other...</option>
+                    </select>
+                </div>
+                <div class="inspector-row hidden" id="new-node-type-custom-row">
+                    <label>Custom Type</label>
+                    <input type="text" id="new-node-type-custom" placeholder="Type Name" />
+                </div>
+                <div class="inspector-actions">
+                    <button class="btn btn-primary btn-sm" id="btn-create-node">Add Node</button>
+                    <button class="btn btn-sm" id="btn-cancel-node">Cancel</button>
+                </div>
+            </div>
+        `;
 
-        const webData = this.app.state.connectionWeb || { nodes: [], edges: [] };
+        const typeSelect = document.getElementById('new-node-type');
+        const customTypeRow = document.getElementById('new-node-type-custom-row');
+
+        typeSelect?.addEventListener('change', () => {
+            if (typeSelect.value === 'other') {
+                customTypeRow?.classList.remove('hidden');
+            } else {
+                customTypeRow?.classList.add('hidden');
+            }
+        });
+
+        document.getElementById('new-node-label')?.focus();
+
+        document.getElementById('btn-create-node')?.addEventListener('click', () => {
+            const label = document.getElementById('new-node-label')?.value;
+            if (!label) {
+                alert('Please enter a name.');
+                return;
+            }
+
+            let type = typeSelect.value;
+            if (type === 'other') {
+                type = document.getElementById('new-node-type-custom')?.value || 'other';
+            }
+
+            this.finishAddNode(label, type);
+        });
+
+        document.getElementById('btn-cancel-node')?.addEventListener('click', () => {
+            this.clearSelection();
+        });
+    }
+
+    finishAddNode(label, type) {
+        const webData = this.getCurrentWebData() || { nodes: [], edges: [] };
 
         // Find best position (center of view)
         let posX = 0, posY = 0;
@@ -754,29 +1051,46 @@ Return ONLY the JSON object, no other text.`;
 
         const newNode = {
             id: `node_${Date.now()}`,
-            type: type,
+            type: type, // Will map to 'other' or specific known types
             label: label,
             x: posX,
             y: posY,
             pinned: true
         };
 
+        if (!webData.nodes) webData.nodes = [];
         webData.nodes.push(newNode);
-        this.app.state.connectionWeb = webData;
+
+        // Ensure state is updated correctly
+        if (this.mode === 'ai') {
+            this.app.state.connectionWeb = webData;
+        } else {
+            if (!this.app.state.customConnectionWebs) this.app.state.customConnectionWebs = {};
+            this.app.state.customConnectionWebs[this.currentWebName] = webData;
+        }
+
         this.app.save();
 
         // Add to graph
         if (this.cy) {
+            // Check if type has color, else use white/default
+            const color = this.NODE_COLORS[type] || '#ffffff'; // White for other/unknown
+
             this.cy.add({
                 data: {
                     id: newNode.id,
                     label: newNode.label,
                     type: newNode.type,
-                    color: this.NODE_COLORS[newNode.type] || '#888'
+                    color: color
                 },
                 position: { x: posX, y: posY }
             });
+        } else {
+            // First node, render graph
+            this.renderGraph();
         }
+
+        this.clearSelection();
     }
 
     toggleLinkingMode() {
@@ -800,116 +1114,139 @@ Return ONLY the JSON object, no other text.`;
         } else {
             btn.classList.remove('btn-active');
             btn.innerHTML = '<span class="btn-icon">🔗</span> Link Nodes';
-            if (this.inspector) {
-                this.inspector.innerHTML = '<div class="inspector-empty">Select a node or edge to view details.</div>';
-            }
-            this.cy.nodes().removeClass('selected');
+            this.clearSelection();
         }
     }
 
     handleLinkStep(node) {
         if (!this.linkSource) {
             // Step 1: Source Selected
-            this.linkSource = node;
-            node.addClass('selected');
+            this.linkSource = node.id();
+
+            // Visual feedback
+            node.addClass('source-node');
+
             if (this.inspector) {
                 this.inspector.innerHTML = `
                     <div class="inspector-empty">
                         <p><strong>🔗 Linking Mode</strong></p>
-                        <p>Source: <strong style="color: ${this.NODE_COLORS[node.data('type')] || '#fff'}">${node.data('label')}</strong></p>
+                        <p>Source: <b>${node.data('label')}</b></p>
                         <p>Now select the <b>TARGET</b> node.</p>
                     </div>`;
             }
         } else {
             // Step 2: Target Selected
-            if (node.id() === this.linkSource.id()) {
+            const targetId = node.id();
+
+            if (targetId === this.linkSource) {
                 alert('Cannot link a node to itself.');
                 return;
             }
 
-            const source = this.linkSource;
-            const target = node;
+            // Remove visual feedback
+            this.cy?.$(`#${this.linkSource}`).removeClass('source-node');
 
-            // Exit linking mode state but keep context for form
-            this.linkingMode = false;
-            const btn = document.getElementById('btn-add-edge');
-            if (btn) {
-                btn.classList.remove('btn-active');
-                btn.innerHTML = '<span class="btn-icon">🔗</span> Link Nodes';
-            }
-            this.cy.nodes().removeClass('selected');
-
-            this.renderNewEdgeForm(source, target);
+            // Show form
+            this.renderNewEdgeForm(this.linkSource, targetId);
+            this.linkSource = null;
         }
     }
 
-    renderNewEdgeForm(source, target) {
+    renderNewEdgeForm(sourceId, targetId) {
         if (!this.inspector) return;
 
-        // Pre-select category based on node types? Default to social.
-        const defaultCat = 'social';
+        const sourceLabel = this.getNodeLabel(sourceId);
+        const targetLabel = this.getNodeLabel(targetId);
+
+        // Turn off linking mode UI temporarily but keep logic
+        this.toggleLinkingMode();
 
         this.inspector.innerHTML = `
-            <div class="inspector-edge">
-                <div class="inspector-header" style="background: transparent; padding: 0 0 16px 0; border: none;">
-                    <h3>🔗 New Connection</h3>
+            <div class="inspector-edge-form">
+                <h4>New Connection</h4>
+                <div class="inspector-row">
+                    <span>${sourceLabel} → ${targetLabel}</span>
                 </div>
                 <div class="inspector-row">
-                    <label>From</label>
-                    <div style="padding: 8px; background: rgba(255,255,255,0.05); border-radius: 4px;">
-                        ${source.data('label')}
-                    </div>
-                </div>
-                <div class="inspector-row">
-                    <label>To</label>
-                    <div style="padding: 8px; background: rgba(255,255,255,0.05); border-radius: 4px;">
-                        ${target.data('label')}
-                    </div>
-                </div>
-                <div class="inspector-row">
-                    <label>Type</label>
-                    <select id="new-edge-type" style="width: 100%; padding: 8px; border-radius: 4px; border: 1px solid var(--border-color); background: var(--bg-primary); color: var(--text-primary);">
-                        ${Object.keys(this.EDGE_TYPES).map(t => `<option value="${t}" ${t === defaultCat ? 'selected' : ''}>${t}</option>`).join('')}
+                    <label>Relationship Type</label>
+                    <select id="new-edge-type">
+                        ${Object.keys(this.EDGE_TYPES).map(t => `<option value="${t}">${t}</option>`).join('')}
+                        <option value="other">Other...</option>
                     </select>
+                </div>
+                 <div class="inspector-row hidden" id="new-edge-type-custom-row">
+                    <label>Custom Type</label>
+                    <input type="text" id="new-edge-type-custom" placeholder="Type Name" />
                 </div>
                 <div class="inspector-row">
                     <label>Label</label>
-                    <input type="text" id="new-edge-label" value="Connected" placeholder="e.g. Friend, Enemy" />
+                    <input type="text" id="new-edge-label" placeholder="e.g. Friend, Enemy" />
                 </div>
                 <div class="inspector-actions">
-                    <button class="btn btn-primary btn-sm" id="btn-create-edge-confirm" style="width: 100%;">Create Connection</button>
-                    <button class="btn btn-secondary btn-sm" id="btn-cancel-edge" style="width: 100%;">Cancel</button>
+                    <button class="btn btn-secondary btn-sm" id="btn-create-edge">Create Link</button>
+                    <button class="btn btn-sm" id="btn-cancel-edge">Cancel</button>
                 </div>
             </div>
         `;
 
-        document.getElementById('btn-create-edge-confirm')?.addEventListener('click', () => {
-            const type = document.getElementById('new-edge-type').value;
-            const label = document.getElementById('new-edge-label').value || 'Connected';
-            this.createEdge(source.id(), target.id(), type, label);
+        // Dynamic labels based on type (just for suggestion or autocomplete? user asked for text input)
+        const typeSelect = document.getElementById('new-edge-type');
+        const customTypeRow = document.getElementById('new-edge-type-custom-row');
+        const labelInput = document.getElementById('new-edge-label');
+
+        typeSelect?.addEventListener('change', () => {
+            const type = typeSelect.value;
+            if (type === 'other') {
+                customTypeRow?.classList.remove('hidden');
+                if (labelInput) labelInput.value = '';
+            } else {
+                customTypeRow?.classList.add('hidden');
+            }
+        });
+
+        document.getElementById('new-edge-label')?.focus();
+
+        document.getElementById('btn-create-edge')?.addEventListener('click', () => {
+            let type = typeSelect.value;
+            if (type === 'other') {
+                type = document.getElementById('new-edge-type-custom')?.value || 'other';
+            }
+            this.createEdge(sourceId, targetId, type, labelInput.value);
         });
 
         document.getElementById('btn-cancel-edge')?.addEventListener('click', () => {
-            this.inspector.innerHTML = '<div class="inspector-empty">Select a node or edge to view details.</div>';
+            this.clearSelection();
         });
     }
 
     createEdge(sourceId, targetId, type, label) {
-        const webData = this.app.state.connectionWeb;
-        if (!webData) return;
+        const webData = this.getCurrentWebData() || { nodes: [], edges: [] };
 
         const newEdge = {
             id: `edge_${Date.now()}`,
             source: sourceId,
             target: targetId,
             type: type,
-            label: label
+            label: label || type // Fallback label
         };
 
+        if (!webData.edges) webData.edges = [];
         webData.edges.push(newEdge);
+
+        // Ensure state is updated correctly
+        if (this.mode === 'ai') {
+            this.app.state.connectionWeb = webData;
+        } else {
+            if (!this.app.state.customConnectionWebs) this.app.state.customConnectionWebs = {};
+            this.app.state.customConnectionWebs[this.currentWebName] = webData;
+        }
+
         this.app.save();
 
+        // Add to graph
         if (this.cy) {
+            const color = this.EDGE_COLORS[type] || '#ffffff'; // White for other/unknown
+
             this.cy.add({
                 data: {
                     id: newEdge.id,
@@ -917,12 +1254,11 @@ Return ONLY the JSON object, no other text.`;
                     target: newEdge.target,
                     label: newEdge.label,
                     category: newEdge.type,
-                    color: this.EDGE_COLORS[newEdge.type] || '#888'
+                    color: color
                 }
             });
         }
 
-        // Show success/select new edge
-        this.selectEdge(this.cy.getElementById(newEdge.id));
+        this.clearSelection();
     }
 }
