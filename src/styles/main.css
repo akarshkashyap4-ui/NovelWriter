@@ -239,6 +239,51 @@ body {
   box-shadow: 0 0 15px var(--accent-glow);
 }
 
+/* Colorful Analysis Tool Buttons */
+#btn-event-line {
+  color: #f59e0b;
+  /* Amber */
+}
+
+#btn-event-line:hover {
+  background: rgba(245, 158, 11, 0.15);
+  color: #fbbf24;
+  box-shadow: 0 0 12px rgba(245, 158, 11, 0.3);
+}
+
+#btn-plot-tracker {
+  color: #06b6d4;
+  /* Cyan */
+}
+
+#btn-plot-tracker:hover {
+  background: rgba(6, 182, 212, 0.15);
+  color: #22d3ee;
+  box-shadow: 0 0 12px rgba(6, 182, 212, 0.3);
+}
+
+#btn-story-pulse {
+  color: #ec4899;
+  /* Pink */
+}
+
+#btn-story-pulse:hover {
+  background: rgba(236, 72, 153, 0.15);
+  color: #f472b6;
+  box-shadow: 0 0 12px rgba(236, 72, 153, 0.3);
+}
+
+#btn-connection-web {
+  color: #8b5cf6;
+  /* Violet */
+}
+
+#btn-connection-web:hover {
+  background: rgba(139, 92, 246, 0.15);
+  color: #a78bfa;
+  box-shadow: 0 0 12px rgba(139, 92, 246, 0.3);
+}
+
 .icon-btn-sm {
   width: 28px;
   height: 28px;
@@ -278,6 +323,98 @@ body {
 .btn-secondary:disabled {
   opacity: 0.5;
   cursor: not-allowed;
+}
+
+/* ========================================
+   Focus Mode - Distraction-Free Writing
+   ======================================== */
+body.focus-mode .sidebar,
+body.focus-mode .right-panel,
+body.focus-mode .top-bar-left,
+body.focus-mode .top-bar-center,
+body.focus-mode .top-bar-right {
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.3s ease;
+}
+
+body.focus-mode .app-container {
+  grid-template-columns: 0 1fr 0;
+}
+
+body.focus-mode .sidebar,
+body.focus-mode .right-panel {
+  width: 0;
+  min-width: 0;
+  padding: 0;
+  overflow: hidden;
+}
+
+body.focus-mode .top-bar {
+  background: transparent;
+  backdrop-filter: none;
+  border-bottom: none;
+}
+
+body.focus-mode .editor-container {
+  max-width: 900px;
+  margin: 0 auto;
+  padding-top: var(--space-xl);
+}
+
+body.focus-mode .formatting-bar {
+  opacity: 1;
+  pointer-events: auto;
+  position: fixed;
+  top: 50%;
+  left: 20px;
+  transform: translateY(-50%);
+  flex-direction: column;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-lg);
+  padding: var(--space-sm);
+  box-shadow: var(--shadow-lg);
+  z-index: 1000;
+  gap: var(--space-xs);
+}
+
+/* Focus mode exit button */
+body.focus-mode::after {
+  content: 'ESC to exit';
+  position: fixed;
+  bottom: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 8px 16px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  color: var(--text-muted);
+  font-size: 12px;
+  opacity: 0;
+  transition: opacity 0.3s ease;
+  pointer-events: none;
+}
+
+body.focus-mode:hover::after {
+  opacity: 0.7;
+}
+
+/* Focus mode button color */
+#btn-focus-mode {
+  color: #10b981;
+  /* Emerald */
+}
+
+#btn-focus-mode:hover {
+  background: rgba(16, 185, 129, 0.15);
+  color: #34d399;
+  box-shadow: 0 0 12px rgba(16, 185, 129, 0.3);
+}
+
+body.focus-mode #btn-focus-mode {
+  color: #ef4444;
 }
 
 /* AI Settings Styles */
@@ -2027,73 +2164,528 @@ body {
 }
 
 /* ========================================
-   Plot Grid View
+   Plot Grid View - Premium Kanban Design
    ======================================== */
 .plot-grid-container {
-  padding: var(--space-lg);
-  overflow: auto;
+  padding: var(--space-xl);
+  min-height: 100%;
+  background: linear-gradient(180deg, var(--bg-primary) 0%, var(--bg-tertiary) 100%);
 }
 
 .plot-grid-header {
-  font-size: 28px;
-  font-weight: 600;
-  margin-bottom: var(--space-lg);
+  font-size: 32px;
+  font-weight: 700;
+  margin-bottom: var(--space-xl);
   color: var(--text-primary);
+  background: var(--accent-gradient);
+  background-clip: text;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
 }
 
-.plot-grid {
-  display: grid;
-  gap: 1px;
+.plot-grid-view {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-lg);
+}
+
+/* Part Groups */
+.plot-part-group {
+  background: var(--bg-secondary);
+  border-radius: var(--radius-lg);
+  padding: var(--space-lg);
+  border-left: 4px solid var(--accent-primary);
+  box-shadow: var(--shadow-md);
+}
+
+.plot-part-header {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin-bottom: var(--space-md);
+  padding-bottom: var(--space-sm);
+  border-bottom: 1px solid var(--border-color);
+}
+
+/* Chapter Groups */
+.plot-chapter-group {
+  margin-bottom: var(--space-lg);
+}
+
+.plot-chapter-header {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--text-muted);
+  background: var(--bg-tertiary);
+  padding: var(--space-xs) var(--space-md);
+  border-radius: var(--radius-sm);
+  margin-bottom: var(--space-md);
+}
+
+/* Scene Rows */
+.plot-scene-row {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-md);
+  margin-bottom: var(--space-md);
+  padding: var(--space-sm) 0;
+}
+
+.plot-scene-name {
+  min-width: 140px;
+  max-width: 140px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-secondary);
+  padding-top: var(--space-sm);
+  flex-shrink: 0;
+}
+
+/* Plot Points Container - Horizontal Scroll */
+.plot-points-container {
+  display: flex;
+  gap: var(--space-sm);
+  overflow-x: auto;
+  padding: var(--space-xs) 0;
+  flex: 1;
+  align-items: flex-start;
+}
+
+.plot-points-container::-webkit-scrollbar {
+  height: 6px;
+}
+
+.plot-points-container::-webkit-scrollbar-track {
+  background: var(--bg-tertiary);
+  border-radius: 3px;
+}
+
+.plot-points-container::-webkit-scrollbar-thumb {
   background: var(--border-color);
+  border-radius: 3px;
+}
+
+.plot-points-container::-webkit-scrollbar-thumb:hover {
+  background: var(--text-muted);
+}
+
+/* Plot Point Cards - Premium Design */
+.plot-point-card {
+  min-width: 180px;
+  max-width: 180px;
+  min-height: 80px;
+  background: var(--bg-primary);
   border: 1px solid var(--border-color);
   border-radius: var(--radius-md);
-  overflow: hidden;
+  padding: var(--space-sm);
+  position: relative;
+  transition: all var(--transition-fast);
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
 }
 
-.plot-grid-row {
-  display: contents;
+/* Colored top border based on position */
+.plot-point-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: var(--card-accent, #3b82f6);
+  border-radius: var(--radius-md) var(--radius-md) 0 0;
 }
 
-.plot-grid-cell {
-  background: var(--bg-secondary);
-  padding: var(--space-md);
-  min-height: 80px;
-  min-width: 150px;
+.plot-point-card:hover {
+  border-color: var(--accent-primary);
+  box-shadow: 0 0 20px rgba(59, 130, 246, 0.2);
+  transform: translateY(-2px);
 }
 
-.plot-grid-cell-header {
-  background: var(--bg-tertiary);
-  font-weight: 600;
-  font-size: 13px;
+.plot-point-card textarea {
+  flex: 1;
+  width: 100%;
+  border: none;
+  background: transparent;
   color: var(--text-primary);
+  font-size: 12px;
+  font-family: var(--font-ui);
+  resize: none;
+  outline: none;
+  line-height: 1.4;
 }
 
-.plot-grid-cell-scene {
-  background: var(--bg-tertiary);
-  font-size: 13px;
+.plot-point-card textarea::placeholder {
+  color: var(--text-muted);
 }
 
-.plot-grid-cell-add {
+/* Delete Button */
+.plot-point-delete {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  width: 18px;
+  height: 18px;
+  border: none;
+  background: rgba(239, 68, 68, 0.1);
+  color: #ef4444;
+  border-radius: 50%;
+  cursor: pointer;
+  opacity: 0;
+  transition: all var(--transition-fast);
   display: flex;
   align-items: center;
   justify-content: center;
+  font-size: 12px;
+  line-height: 1;
+}
+
+.plot-point-card:hover .plot-point-delete {
+  opacity: 1;
+}
+
+.plot-point-delete:hover {
+  background: #ef4444;
+  color: white;
+}
+
+/* Add Point Button */
+.plot-add-point-btn {
+  min-width: 40px;
+  height: 40px;
+  border: 2px dashed var(--border-color);
+  background: transparent;
   color: var(--text-muted);
+  border-radius: var(--radius-md);
   cursor: pointer;
+  font-size: 20px;
+  transition: all var(--transition-fast);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  align-self: center;
+}
+
+.plot-add-point-btn:hover {
+  border-color: var(--accent-primary);
+  color: var(--accent-primary);
+  background: var(--accent-light);
+}
+
+/* Custom Grid Styles */
+.custom-grid-container {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+}
+
+.custom-grid-row {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-md);
+  background: var(--bg-secondary);
+  padding: var(--space-md);
+  border-radius: var(--radius-md);
+  border-left: 4px solid var(--accent-primary);
+}
+
+.custom-grid-label {
+  min-width: 120px;
+  max-width: 120px;
+  flex-shrink: 0;
+}
+
+.custom-row-label-input {
+  width: 100%;
+  font-weight: 600;
+  color: var(--text-primary);
+  padding: var(--space-sm);
+  background: var(--bg-tertiary);
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  font-family: var(--font-ui);
+  font-size: 13px;
+  outline: none;
   transition: all var(--transition-fast);
 }
 
-.plot-grid-cell-add:hover {
-  background: var(--bg-hover);
+.custom-row-label-input:focus {
+  border-color: var(--accent-primary);
+  background: var(--bg-primary);
+}
+
+.custom-grid-points {
+  display: flex;
+  gap: var(--space-sm);
+  overflow-x: auto;
+  flex: 1;
+  padding: var(--space-xs) 0;
+}
+
+.custom-add-point-btn {
+  min-width: 40px;
+  height: 40px;
+  border: 2px dashed var(--border-color);
+  background: transparent;
+  color: var(--text-muted);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  font-size: 20px;
+  transition: all var(--transition-fast);
+}
+
+.custom-add-point-btn:hover {
+  border-color: var(--accent-primary);
   color: var(--accent-primary);
 }
 
-.plot-point-card {
-  background: var(--bg-primary);
-  border: 1px solid var(--border-light);
-  border-radius: var(--radius-sm);
-  padding: var(--space-sm);
-  font-size: 12px;
+.custom-add-row-btn {
+  padding: var(--space-md) var(--space-lg);
+  border: 2px dashed var(--border-color);
+  background: transparent;
+  color: var(--text-muted);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  font-size: 14px;
+  transition: all var(--transition-fast);
+  margin-top: var(--space-md);
+}
+
+.custom-add-row-btn:hover {
+  border-color: var(--accent-primary);
+  color: var(--accent-primary);
+  background: var(--accent-light);
+}
+
+/* Card color variations */
+.plot-point-card[data-color="blue"]::before {
+  background: #3b82f6;
+}
+
+.plot-point-card[data-color="green"]::before {
+  background: #10b981;
+}
+
+.plot-point-card[data-color="amber"]::before {
+  background: #f59e0b;
+}
+
+.plot-point-card[data-color="purple"]::before {
+  background: #8b5cf6;
+}
+
+.plot-point-card[data-color="pink"]::before {
+  background: #ec4899;
+}
+
+/* Animation for new cards */
+@keyframes cardFadeIn {
+  from {
+    opacity: 0;
+    transform: scale(0.9) translateY(10px);
+  }
+
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+.plot-point-card.new {
+  animation: cardFadeIn 0.3s ease forwards;
+}
+
+/* ========================================
+   Plot Line View - Premium Timeline Design
+   ======================================== */
+.plotline-view {
+  padding: var(--space-xl);
+  min-height: 100%;
+  background: linear-gradient(180deg, var(--bg-primary) 0%, var(--bg-tertiary) 100%);
+}
+
+.plotline-title {
+  font-size: 32px;
+  font-weight: 700;
+  margin-bottom: var(--space-xl);
+  background: var(--accent-gradient);
+  background-clip: text;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.plotline-description {
   color: var(--text-secondary);
+  font-size: 14px;
+  margin-bottom: var(--space-lg);
+  max-width: 600px;
+}
+
+.plotline-points {
+  display: flex;
+  gap: var(--space-md);
+  overflow-x: auto;
+  padding: var(--space-md) 0;
+  align-items: stretch;
+}
+
+.plotline-points::-webkit-scrollbar {
+  height: 8px;
+}
+
+.plotline-points::-webkit-scrollbar-track {
+  background: var(--bg-tertiary);
+  border-radius: 4px;
+}
+
+.plotline-points::-webkit-scrollbar-thumb {
+  background: var(--border-color);
+  border-radius: 4px;
+}
+
+.plotline-points::-webkit-scrollbar-thumb:hover {
+  background: var(--text-muted);
+}
+
+.plotline-point-card {
+  min-width: 280px;
+  max-width: 280px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-lg);
+  padding: var(--space-md);
+  position: relative;
+  transition: all var(--transition-fast);
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.plotline-point-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 4px;
+  background: var(--card-accent, #3b82f6);
+  border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+}
+
+.plotline-point-card:hover {
+  border-color: var(--accent-primary);
+  box-shadow: 0 0 25px rgba(59, 130, 246, 0.15);
+  transform: translateY(-4px);
+}
+
+.plotline-point-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: var(--space-sm);
+}
+
+.plotline-point-number {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text-muted);
+  background: var(--bg-tertiary);
+  padding: 2px 8px;
+  border-radius: var(--radius-sm);
+}
+
+.plotline-point-delete {
+  width: 22px;
+  height: 22px;
+  border: none;
+  background: rgba(239, 68, 68, 0.1);
+  color: #ef4444;
+  border-radius: 50%;
+  cursor: pointer;
+  opacity: 0;
+  transition: all var(--transition-fast);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+}
+
+.plotline-point-card:hover .plotline-point-delete {
+  opacity: 1;
+}
+
+.plotline-point-delete:hover {
+  background: #ef4444;
+  color: white;
+}
+
+.plotline-point-card textarea {
+  flex: 1;
+  min-height: 120px;
+  width: 100%;
+  border: none;
+  background: transparent;
+  color: var(--text-primary);
+  font-size: 14px;
+  font-family: var(--font-ui);
+  resize: none;
+  outline: none;
+  line-height: 1.5;
+}
+
+.plotline-point-card textarea::placeholder {
+  color: var(--text-muted);
+}
+
+.plotline-add-btn {
+  min-width: 60px;
+  min-height: 200px;
+  border: 2px dashed var(--border-color);
+  background: transparent;
+  color: var(--text-muted);
+  border-radius: var(--radius-lg);
+  cursor: pointer;
+  font-size: 24px;
+  transition: all var(--transition-fast);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.plotline-add-btn:hover {
+  border-color: var(--accent-primary);
+  color: var(--accent-primary);
+  background: var(--accent-light);
+}
+
+/* Card color variations for plot lines */
+.plotline-point-card[data-color="blue"]::before {
+  background: #3b82f6;
+}
+
+.plotline-point-card[data-color="green"]::before {
+  background: #10b981;
+}
+
+.plotline-point-card[data-color="amber"]::before {
+  background: #f59e0b;
+}
+
+.plotline-point-card[data-color="purple"]::before {
+  background: #8b5cf6;
+}
+
+.plotline-point-card[data-color="pink"]::before {
+  background: #ec4899;
+}
+
+.plotline-point-card[data-color="cyan"]::before {
+  background: #06b6d4;
 }
 
 /* ========================================

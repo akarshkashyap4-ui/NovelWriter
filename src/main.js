@@ -152,6 +152,23 @@ class NovelWriterApp {
       document.getElementById('thesaurus-modal').classList.remove('open');
     });
 
+    // Focus Mode toggle
+    document.getElementById('btn-focus-mode').addEventListener('click', () => {
+      this.toggleFocusMode();
+    });
+
+    // Escape key to exit focus mode
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' && document.body.classList.contains('focus-mode')) {
+        this.toggleFocusMode();
+      }
+      // F11 to toggle focus mode
+      if (e.key === 'F11') {
+        e.preventDefault();
+        this.toggleFocusMode();
+      }
+    });
+
     document.getElementById('thesaurus-modal').addEventListener('click', (e) => {
       if (e.target.id === 'thesaurus-modal' || e.target.id === 'thesaurus-backdrop') {
         document.getElementById('thesaurus-modal').classList.remove('open');
@@ -486,6 +503,10 @@ class NovelWriterApp {
     if (loadContent) {
       this.loadBookTitlePage();
     }
+  }
+
+  toggleFocusMode() {
+    document.body.classList.toggle('focus-mode');
   }
 
   // ========== CONTENT LOADERS ==========

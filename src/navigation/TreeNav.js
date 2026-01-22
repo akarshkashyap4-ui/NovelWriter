@@ -316,7 +316,7 @@ export class TreeNav {
 
         if (state.plot.plotLines) {
             state.plot.plotLines.forEach(pl => {
-                html += this.renderItem({ section: 'plot', id: pl.id, type: pl.type || 'plotline', label: pl.title, icon: pl.type === 'grid' ? 'grid' : 'list', depth: 1 });
+                html += this.renderItem({ section: 'plot', id: pl.id, type: pl.type || 'plotline', label: pl.title, icon: pl.type === 'grid' ? 'grid' : 'dot', depth: 1 });
             });
         }
 
@@ -668,6 +668,7 @@ export class TreeNav {
         this.app.currentContext = { type: 'plot-grid', gridId };
 
         const isDefault = gridId === 'plot-grid-default';
+        const colors = ['blue', 'green', 'amber', 'purple', 'pink'];
 
         if (!state.plot.gridData) state.plot.gridData = {};
         if (!state.plot.gridData[gridId]) state.plot.gridData[gridId] = {};
@@ -682,13 +683,18 @@ export class TreeNav {
             state.manuscript.parts.forEach(part => {
                 html += `<div class="plot-part-group"><div class="plot-part-header">${part.title}</div>`;
                 part.chapters.forEach(chapter => {
-                    html += `<div class="plot-chapter-group"><div class="plot-chapter-header">${chapter.title}</div>`;
-                    chapter.scenes.forEach(scene => {
+                    html += `<div class="plot-chapter-group"><div class="plot-chapter-header">${part.title} – ${chapter.title}</div>`;
+                    chapter.scenes.forEach((scene, sceneIdx) => {
                         const points = gridData[scene.id] || [];
                         html += `<div class="plot-scene-row" data-scene="${scene.id}">
               <div class="plot-scene-name">${scene.title}</div>
               <div class="plot-points-container">
-                ${points.map((p, i) => `<div class="plot-point-card" data-index="${i}" contenteditable="true">${p}</div>`).join('')}
+                ${points.map((p, i) => `
+                  <div class="plot-point-card" data-scene="${scene.id}" data-index="${i}" data-color="${colors[i % colors.length]}">
+                    <button class="plot-point-delete" data-scene="${scene.id}" data-index="${i}">×</button>
+                    <textarea placeholder="Describe plot point...">${this.escapeHtml(p)}</textarea>
+                  </div>
+                `).join('')}
                 <button class="plot-add-point-btn" data-scene="${scene.id}">+</button>
               </div>
             </div>`;
@@ -698,15 +704,22 @@ export class TreeNav {
                 html += `</div>`;
             });
         } else {
-            // Custom grid: empty, user builds manually
+            // Custom grid: user builds manually
             if (!gridData.rows) gridData.rows = [];
 
             html += `<div class="custom-grid-container">
         ${gridData.rows.map((row, i) => `
           <div class="custom-grid-row" data-row="${i}">
-            <div class="custom-grid-label" contenteditable="true" data-row="${i}">${row.label || 'Row ' + (i + 1)}</div>
+            <div class="custom-grid-label">
+              <input type="text" value="${this.escapeHtml(row.label || 'Row ' + (i + 1))}" data-row="${i}" class="custom-row-label-input" />
+            </div>
             <div class="custom-grid-points">
-              ${(row.points || []).map((p, j) => `<div class="plot-point-card" data-row="${i}" data-index="${j}" contenteditable="true">${p}</div>`).join('')}
+              ${(row.points || []).map((p, j) => `
+                <div class="plot-point-card" data-row="${i}" data-index="${j}" data-color="${colors[j % colors.length]}">
+                  <button class="plot-point-delete" data-row="${i}" data-index="${j}">×</button>
+                  <textarea placeholder="Describe plot point...">${this.escapeHtml(p)}</textarea>
+                </div>
+              `).join('')}
               <button class="custom-add-point-btn" data-row="${i}">+</button>
             </div>
           </div>
@@ -718,65 +731,127 @@ export class TreeNav {
         html += `</div></div>`;
         editor.innerHTML = html;
 
-        // Bind events
+        // Bind events for default grid
         if (isDefault) {
-            editor.querySelectorAll('.plot-add-point-btn').forEach(btn => {
-                btn.addEventListener('click', () => {
-                    const sceneId = btn.dataset.scene;
-                    if (!gridData[sceneId]) gridData[sceneId] = [];
-                    gridData[sceneId].push('Plot point');
-                    this.app.save();
-                    this.loadPlotGrid(gridId);
-                });
-            });
-            editor.querySelectorAll('.plot-point-card').forEach(card => {
-                card.addEventListener('blur', () => {
-                    const row = card.closest('.plot-scene-row');
-                    const sceneId = row.dataset.scene;
-                    const index = parseInt(card.dataset.index);
-                    gridData[sceneId][index] = card.textContent;
-                    this.app.save();
-                });
-            });
+            this.bindDefaultGridEvents(editor, gridData, gridId);
         } else {
-            // Custom grid events
-            const addRowBtn = document.getElementById('add-custom-row');
-            if (addRowBtn) {
-                addRowBtn.addEventListener('click', () => {
-                    if (!gridData.rows) gridData.rows = [];
-                    gridData.rows.push({ label: 'New Row', points: [] });
+            this.bindCustomGridEvents(editor, gridData, gridId);
+        }
+    }
+
+    escapeHtml(text) {
+        const div = document.createElement('div');
+        div.textContent = text || '';
+        return div.innerHTML;
+    }
+
+    bindDefaultGridEvents(editor, gridData, gridId) {
+        // Add point buttons
+        editor.querySelectorAll('.plot-add-point-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const sceneId = btn.dataset.scene;
+                if (!gridData[sceneId]) gridData[sceneId] = [];
+                gridData[sceneId].push('');
+                this.app.save();
+                this.loadPlotGrid(gridId);
+                // Focus new card
+                setTimeout(() => {
+                    const cards = editor.querySelectorAll(`.plot-point-card[data-scene="${sceneId}"]`);
+                    const lastCard = cards[cards.length - 1];
+                    if (lastCard) {
+                        lastCard.classList.add('new');
+                        lastCard.querySelector('textarea')?.focus();
+                    }
+                }, 50);
+            });
+        });
+
+        // Delete buttons
+        editor.querySelectorAll('.plot-point-delete').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const sceneId = btn.dataset.scene;
+                const index = parseInt(btn.dataset.index);
+                if (gridData[sceneId]) {
+                    gridData[sceneId].splice(index, 1);
                     this.app.save();
                     this.loadPlotGrid(gridId);
-                });
-            }
-
-            editor.querySelectorAll('.custom-add-point-btn').forEach(btn => {
-                btn.addEventListener('click', () => {
-                    const rowIdx = parseInt(btn.dataset.row);
-                    if (!gridData.rows[rowIdx].points) gridData.rows[rowIdx].points = [];
-                    gridData.rows[rowIdx].points.push('Point');
-                    this.app.save();
-                    this.loadPlotGrid(gridId);
-                });
+                }
             });
+        });
 
-            editor.querySelectorAll('.custom-grid-label').forEach(el => {
-                el.addEventListener('blur', () => {
-                    const rowIdx = parseInt(el.dataset.row);
-                    gridData.rows[rowIdx].label = el.textContent;
+        // Textarea blur to save
+        editor.querySelectorAll('.plot-point-card textarea').forEach(textarea => {
+            textarea.addEventListener('blur', () => {
+                const card = textarea.closest('.plot-point-card');
+                const sceneId = card.dataset.scene;
+                const index = parseInt(card.dataset.index);
+                if (gridData[sceneId]) {
+                    gridData[sceneId][index] = textarea.value;
                     this.app.save();
-                });
+                }
             });
+        });
+    }
 
-            editor.querySelectorAll('.plot-point-card[data-row]').forEach(card => {
-                card.addEventListener('blur', () => {
-                    const rowIdx = parseInt(card.dataset.row);
-                    const pointIdx = parseInt(card.dataset.index);
-                    gridData.rows[rowIdx].points[pointIdx] = card.textContent;
-                    this.app.save();
-                });
+    bindCustomGridEvents(editor, gridData, gridId) {
+        // Add row button
+        const addRowBtn = document.getElementById('add-custom-row');
+        if (addRowBtn) {
+            addRowBtn.addEventListener('click', () => {
+                if (!gridData.rows) gridData.rows = [];
+                gridData.rows.push({ label: 'New Row', points: [] });
+                this.app.save();
+                this.loadPlotGrid(gridId);
             });
         }
+
+        // Add point buttons
+        editor.querySelectorAll('.custom-add-point-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const rowIdx = parseInt(btn.dataset.row);
+                if (!gridData.rows[rowIdx].points) gridData.rows[rowIdx].points = [];
+                gridData.rows[rowIdx].points.push('');
+                this.app.save();
+                this.loadPlotGrid(gridId);
+            });
+        });
+
+        // Delete buttons
+        editor.querySelectorAll('.plot-point-delete').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const rowIdx = parseInt(btn.dataset.row);
+                const index = parseInt(btn.dataset.index);
+                if (gridData.rows[rowIdx]?.points) {
+                    gridData.rows[rowIdx].points.splice(index, 1);
+                    this.app.save();
+                    this.loadPlotGrid(gridId);
+                }
+            });
+        });
+
+        // Row label inputs
+        editor.querySelectorAll('.custom-row-label-input').forEach(input => {
+            input.addEventListener('blur', () => {
+                const rowIdx = parseInt(input.dataset.row);
+                gridData.rows[rowIdx].label = input.value;
+                this.app.save();
+            });
+        });
+
+        // Textarea blur to save
+        editor.querySelectorAll('.plot-point-card textarea').forEach(textarea => {
+            textarea.addEventListener('blur', () => {
+                const card = textarea.closest('.plot-point-card');
+                const rowIdx = parseInt(card.dataset.row);
+                const index = parseInt(card.dataset.index);
+                if (gridData.rows[rowIdx]?.points) {
+                    gridData.rows[rowIdx].points[index] = textarea.value;
+                    this.app.save();
+                }
+            });
+        });
     }
 
     loadPlotLine(id) {
@@ -785,16 +860,21 @@ export class TreeNav {
         this.app.currentContext = { type: 'plotline', id };
 
         if (!plotLine.points) plotLine.points = [];
+        const colors = ['blue', 'green', 'amber', 'purple', 'pink', 'cyan'];
 
         const editor = document.getElementById('editor-content');
         editor.innerHTML = `
       <div class="plotline-view">
-        <h1 class="plotline-title">${plotLine.title}</h1>
+        <h1 class="plotline-title">${this.escapeHtml(plotLine.title)}</h1>
+        <p class="plotline-description">Add plot points to outline your story. Drag to reorder, click to edit.</p>
         <div class="plotline-points">
           ${plotLine.points.map((p, i) => `
-            <div class="plotline-point-card">
-              <div class="plotline-point-title" contenteditable="true" data-index="${i}">${p}</div>
-              <div class="plotline-point-lines"></div>
+            <div class="plotline-point-card" data-index="${i}" data-color="${colors[i % colors.length]}">
+              <div class="plotline-point-header">
+                <span class="plotline-point-number">#${i + 1}</span>
+                <button class="plotline-point-delete" data-index="${i}">×</button>
+              </div>
+              <textarea placeholder="Describe this plot point...">${this.escapeHtml(p)}</textarea>
             </div>
           `).join('')}
           <button class="plotline-add-btn" id="add-plot-point">+</button>
@@ -802,15 +882,38 @@ export class TreeNav {
       </div>
     `;
 
+        // Add point button
         document.getElementById('add-plot-point').addEventListener('click', () => {
-            plotLine.points.push('New Plot Point');
+            plotLine.points.push('');
             this.app.save();
             this.loadPlotLine(id);
+            // Focus new card
+            setTimeout(() => {
+                const cards = editor.querySelectorAll('.plotline-point-card');
+                const lastCard = cards[cards.length - 1];
+                if (lastCard) {
+                    lastCard.querySelector('textarea')?.focus();
+                }
+            }, 50);
         });
 
-        editor.querySelectorAll('.plotline-point-title').forEach(el => {
-            el.addEventListener('blur', () => {
-                plotLine.points[parseInt(el.dataset.index)] = el.textContent;
+        // Delete buttons
+        editor.querySelectorAll('.plotline-point-delete').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const index = parseInt(btn.dataset.index);
+                plotLine.points.splice(index, 1);
+                this.app.save();
+                this.loadPlotLine(id);
+            });
+        });
+
+        // Textarea blur to save
+        editor.querySelectorAll('.plotline-point-card textarea').forEach(textarea => {
+            textarea.addEventListener('blur', () => {
+                const card = textarea.closest('.plotline-point-card');
+                const index = parseInt(card.dataset.index);
+                plotLine.points[index] = textarea.value;
                 this.app.save();
             });
         });
