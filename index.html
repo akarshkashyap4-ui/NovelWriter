@@ -109,19 +109,54 @@
               d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" />
           </svg>
         </button>
-        <button class="icon-btn" id="btn-theme" title="Toggle Theme">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <circle cx="12" cy="12" r="5" />
-            <line x1="12" y1="1" x2="12" y2="3" />
-            <line x1="12" y1="21" x2="12" y2="23" />
-            <line x1="4.22" y1="4.22" x2="5.64" y2="5.64" />
-            <line x1="18.36" y1="18.36" x2="19.78" y2="19.78" />
-            <line x1="1" y1="12" x2="3" y2="12" />
-            <line x1="21" y1="12" x2="23" y2="12" />
-            <line x1="4.22" y1="19.78" x2="5.64" y2="18.36" />
-            <line x1="18.36" y1="5.64" x2="19.78" y2="4.22" />
-          </svg>
-        </button>
+        <div class="theme-selector" id="theme-selector">
+          <button class="icon-btn" id="btn-theme" title="Themes">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <circle cx="12" cy="12" r="10" />
+              <path d="M12 2a10 10 0 0 0 0 20 4 4 0 0 0 0-8 2 2 0 0 1 0-4 10 10 0 0 0 0-8z" />
+              <circle cx="12" cy="12" r="2" fill="currentColor" />
+            </svg>
+          </button>
+          <div class="theme-dropdown" id="theme-dropdown">
+            <div class="theme-dropdown-header">Choose Theme</div>
+            <button class="theme-option" data-theme="light">
+              <span class="theme-preview" style="background: linear-gradient(135deg, #f3f5f9 50%, #3b82f6 50%);"></span>
+              <span>Light</span>
+            </button>
+            <button class="theme-option" data-theme="dark">
+              <span class="theme-preview" style="background: linear-gradient(135deg, #0f1115 50%, #60a5fa 50%);"></span>
+              <span>Dark</span>
+            </button>
+            <button class="theme-option" data-theme="soft-dark">
+              <span class="theme-preview" style="background: linear-gradient(135deg, #1a1d23 50%, #60a5fa 50%);"></span>
+              <span>Soft Dark</span>
+            </button>
+            <button class="theme-option" data-theme="rain">
+              <span class="theme-preview" style="background: linear-gradient(135deg, #0f111a 50%, #7dd3fc 50%);"></span>
+              <span>Rain</span>
+            </button>
+            <button class="theme-option" data-theme="sepia">
+              <span class="theme-preview" style="background: linear-gradient(135deg, #f4ecd8 50%, #8b5a2b 50%);"></span>
+              <span>Sepia</span>
+            </button>
+            <button class="theme-option" data-theme="ocean">
+              <span class="theme-preview" style="background: linear-gradient(135deg, #0c1929 50%, #0ea5e9 50%);"></span>
+              <span>Ocean</span>
+            </button>
+            <button class="theme-option" data-theme="midnight">
+              <span class="theme-preview" style="background: linear-gradient(135deg, #0f0f1a 50%, #8b5cf6 50%);"></span>
+              <span>Midnight</span>
+            </button>
+            <button class="theme-option" data-theme="forest">
+              <span class="theme-preview" style="background: linear-gradient(135deg, #0f1912 50%, #10b981 50%);"></span>
+              <span>Forest</span>
+            </button>
+            <button class="theme-option" data-theme="sunset">
+              <span class="theme-preview" style="background: linear-gradient(135deg, #1a1210 50%, #f97316 50%);"></span>
+              <span>Sunset</span>
+            </button>
+          </div>
+        </div>
       </div>
     </header>
 
@@ -177,6 +212,17 @@
               <option value="28">28px</option>
             </select>
           </div>
+          <!-- Focus Mode Button - Separated from font options -->
+          <div style="margin-left: auto;"></div>
+          <button class="toolbar-btn" id="btn-focus-mode" title="Focus Mode (F11)" style="margin-left: 24px;">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+              stroke-linecap="round" stroke-linejoin="round">
+              <path d="M8 3H5a2 2 0 0 0-2 2v3"></path>
+              <path d="M21 8V5a2 2 0 0 0-2-2h-3"></path>
+              <path d="M3 16v3a2 2 0 0 0 2 2h3"></path>
+              <path d="M16 21h3a2 2 0 0 0 2-2v-3"></path>
+            </svg>
+          </button>
         </div>
 
         <!-- Editor Content -->

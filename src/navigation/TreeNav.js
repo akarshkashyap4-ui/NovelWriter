@@ -2617,6 +2617,10 @@ ${manuscriptContent}`;
                 </div>
 
                 <div class="dashboard-actions">
+                    <label class="export-option" style="display: flex; align-items: center; gap: 8px; margin-bottom: 12px; color: var(--text-secondary); cursor: pointer;">
+                        <input type="checkbox" id="export-dark-mode" style="width: 16px; height: 16px; cursor: pointer;">
+                        <span>Export in Dark Mode</span>
+                    </label>
                     <button class="btn-large btn-secondary" id="btn-print-book">🖨️ Export / Print Book</button>
                 </div>
             </div>
@@ -2624,7 +2628,10 @@ ${manuscriptContent}`;
 
         // Bind events
         document.getElementById('btn-generate-synopsis').addEventListener('click', () => this.generateSynopsis());
-        document.getElementById('btn-print-book').addEventListener('click', () => this.printBook());
+        document.getElementById('btn-print-book').addEventListener('click', () => {
+            const darkMode = document.getElementById('export-dark-mode').checked;
+            this.printBook(darkMode);
+        });
 
         document.getElementById('synopsis-editor').addEventListener('input', (e) => {
             this.app.state.metadata.synopsis = e.target.value;
@@ -2689,10 +2696,38 @@ Return ONLY the synopsis text, no headers or labels.`;
         }
     }
 
-    printBook() {
+    async printBook(darkMode = false) {
         const state = this.app.state;
         const parts = state.manuscript.parts || [];
         const synopsis = state.metadata.synopsis || '';
+
+        // Pre-load all chapter mood art images from external storage if needed
+        for (const part of parts) {
+            for (const chapter of part.chapters) {
+                if (chapter.moodArt && !chapter.moodArt.imageData && chapter.moodArt.filename && this.app.fileStorage) {
+                    try {
+                        chapter.moodArt.imageData = await this.app.fileStorage.loadImage(chapter.moodArt.filename);
+                    } catch (e) {
+                        console.warn('Failed to load mood art for print:', e);
+                    }
+                }
+            }
+        }
+
+        // Color scheme based on dark mode
+        const colors = darkMode ? {
+            bg: '#1a1d23',
+            text: '#e2e8f0',
+            textMuted: '#9ca3af',
+            accent: '#60a5fa',
+            line: 'rgba(96, 165, 250, 0.4)'
+        } : {
+            bg: '#ffffff',
+            text: '#1a1a1a',
+            textMuted: '#555',
+            accent: '#3b82f6',
+            line: 'rgba(0, 0, 0, 0.75)'
+        };
 
         let bookHtml = `
             <!DOCTYPE html>
@@ -2704,7 +2739,8 @@ Return ONLY the synopsis text, no headers or labels.`;
                         font-family: Georgia, 'Times New Roman', serif;
                         font-size: 12pt;
                         line-height: 1.7;
-                        color: #1a1a1a;
+                        color: ${colors.text};
+                        background: ${colors.bg};
                         max-width: 6.5in;
                         margin: 0 auto;
                         padding: 0;
@@ -2724,12 +2760,13 @@ Return ONLY the synopsis text, no headers or labels.`;
                         font-size: 42pt;
                         font-weight: bold;
                         margin-bottom: 0.3em;
+                        color: ${colors.text};
                     }
                     .cover-subtitle {
                         font-family: Georgia, serif;
                         font-size: 14pt;
                         font-weight: normal;
-                        color: #555;
+                        color: ${colors.textMuted};
                         text-transform: uppercase;
                         letter-spacing: 0.1em;
                         margin-bottom: 1em;
@@ -2739,13 +2776,14 @@ Return ONLY the synopsis text, no headers or labels.`;
                         font-size: 14pt;
                         font-style: italic;
                         margin-top: 2em;
+                        color: ${colors.text};
                     }
                     .cover-synopsis {
                         margin-top: 2em;
                         max-width: 85%;
                         font-style: italic;
                         font-size: 10pt;
-                        color: #444;
+                        color: ${colors.textMuted};
                         line-height: 1.5;
                         text-align: justify;
                         margin-bottom: 3em;
@@ -2754,7 +2792,7 @@ Return ONLY the synopsis text, no headers or labels.`;
                     .aesthetic-line {
                         border: 0;
                         height: 1px;
-                        background-image: linear-gradient(to right, rgba(0, 0, 0, 0), rgba(0, 0, 0, 0.75), rgba(0, 0, 0, 0));
+                        background-image: linear-gradient(to right, transparent, ${colors.line}, transparent);
                         margin: 2em auto;
                         width: 60%;
                     }
@@ -2813,8 +2851,16 @@ Return ONLY the synopsis text, no headers or labels.`;
             // PARTS HIDDEN: We iterate but do NOT print a Part Title page.
 
             part.chapters.forEach((chapter, cIdx) => {
+                // Add mood art image if exists
+                const moodArtHtml = chapter.moodArt && chapter.moodArt.imageData ? `
+                    <div class="chapter-mood-art">
+                        <img src="${chapter.moodArt.imageData}" alt="Chapter Mood" style="max-width: 100%; max-height: 300px; display: block; margin: 1em auto;" />
+                    </div>
+                ` : '';
+
                 bookHtml += `<div class="chapter">
-                    <h3>Chapter ${cIdx + 1}<br>${chapter.displayTitle || chapter.title}</h3>`;
+                    <h3>Chapter ${cIdx + 1}<br>${chapter.displayTitle || chapter.title}</h3>
+                    ${moodArtHtml}`;
 
                 chapter.scenes?.forEach((scene, sIdx) => {
                     if (sIdx > 0) bookHtml += '<div class="scene-break"></div>';

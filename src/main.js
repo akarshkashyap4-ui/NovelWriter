@@ -50,19 +50,12 @@ class NovelWriterApp {
     this.bindEvents();
     this.bindSelectionEvents();
     this.render();
-    this.applyTheme(this.state.settings.theme);
 
     console.log('NovelWriter initialized with AI service!');
   }
 
   bindEvents() {
-    // Theme toggle
-    document.getElementById('btn-theme').addEventListener('click', () => {
-      const newTheme = this.state.settings.theme === 'light' ? 'dark' : 'light';
-      this.state.settings.theme = newTheme;
-      this.applyTheme(newTheme);
-      this.save();
-    });
+    // Theme toggle - REMOVED (replaced by dropdown)
 
     // New Project
     document.getElementById('btn-new-project').addEventListener('click', () => {
@@ -121,6 +114,36 @@ class NovelWriterApp {
     document.getElementById('btn-dashboard').addEventListener('click', () => {
       this.treeNav.loadDashboard();
     });
+
+    // Theme Selector
+    const themeSelector = document.getElementById('theme-selector');
+    const themeBtn = document.getElementById('btn-theme');
+    const themeDropdown = document.getElementById('theme-dropdown');
+
+    themeBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      themeSelector.classList.toggle('open');
+    });
+
+    // Close dropdown when clicking outside
+    document.addEventListener('click', (e) => {
+      if (!themeSelector.contains(e.target)) {
+        themeSelector.classList.remove('open');
+      }
+    });
+
+    // Theme option click handlers
+    themeDropdown.querySelectorAll('.theme-option').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const themeName = btn.dataset.theme;
+        this.setTheme(themeName);
+        themeSelector.classList.remove('open');
+      });
+    });
+
+    // Load saved theme
+    const savedTheme = localStorage.getItem('novelwriter-theme') || 'dark';
+    this.setTheme(savedTheme);
 
     // Settings modal
     document.getElementById('btn-settings').addEventListener('click', () => {
@@ -415,12 +438,25 @@ class NovelWriterApp {
     }
   }
 
-  openReadingMode() {
+  async openReadingMode() {
     const modal = document.getElementById('reading-modal');
     const content = document.getElementById('reading-content');
     const title = document.getElementById('reading-title');
 
     title.textContent = this.state.metadata.title;
+
+    // Pre-load all chapter mood art images from external storage if needed
+    for (const part of this.state.manuscript.parts) {
+      for (const chapter of part.chapters) {
+        if (chapter.moodArt && !chapter.moodArt.imageData && chapter.moodArt.filename && this.fileStorage) {
+          try {
+            chapter.moodArt.imageData = await this.fileStorage.loadImage(chapter.moodArt.filename);
+          } catch (e) {
+            console.warn('Failed to load mood art for reading mode:', e);
+          }
+        }
+      }
+    }
 
     let html = `<div class="reading-book">
       <h1 class="reading-book-title">${this.state.metadata.title}</h1>
@@ -433,7 +469,7 @@ class NovelWriterApp {
 
       part.chapters.forEach(chapter => {
         // Add mood art if exists
-        const moodArtHtml = chapter.moodArt ? `
+        const moodArtHtml = chapter.moodArt && chapter.moodArt.imageData ? `
           <div class="reading-chapter-mood-art">
             <img src="${chapter.moodArt.imageData}" alt="Chapter Mood" />
           </div>
@@ -470,32 +506,7 @@ class NovelWriterApp {
     document.body.style.overflow = '';
   }
 
-  applyTheme(theme) {
-    document.documentElement.setAttribute('data-theme', theme);
 
-    const themeBtn = document.getElementById('btn-theme');
-    if (theme === 'dark') {
-      themeBtn.innerHTML = `
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
-        </svg>
-      `;
-    } else {
-      themeBtn.innerHTML = `
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <circle cx="12" cy="12" r="5"/>
-          <line x1="12" y1="1" x2="12" y2="3"/>
-          <line x1="12" y1="21" x2="12" y2="23"/>
-          <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/>
-          <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/>
-          <line x1="1" y1="12" x2="3" y2="12"/>
-          <line x1="21" y1="12" x2="23" y2="12"/>
-          <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/>
-          <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>
-        </svg>
-      `;
-    }
-  }
 
   render(loadContent = true) {
     document.getElementById('project-title').textContent = this.state.metadata.title;
@@ -506,7 +517,37 @@ class NovelWriterApp {
   }
 
   toggleFocusMode() {
-    document.body.classList.toggle('focus-mode');
+    const isFocusMode = document.body.classList.toggle('focus-mode');
+
+    // Use browser fullscreen API for true fullscreen
+    if (isFocusMode) {
+      if (document.documentElement.requestFullscreen) {
+        document.documentElement.requestFullscreen().catch(() => {
+          // Fullscreen denied, just use CSS focus mode
+        });
+      }
+    } else {
+      if (document.fullscreenElement && document.exitFullscreen) {
+        document.exitFullscreen().catch(() => { });
+      }
+    }
+  }
+
+  setTheme(themeName) {
+    // Map 'light' to remove data-theme, others set the attribute
+    if (themeName === 'light') {
+      document.documentElement.removeAttribute('data-theme');
+    } else {
+      document.documentElement.setAttribute('data-theme', themeName);
+    }
+
+    // Save to localStorage
+    localStorage.setItem('novelwriter-theme', themeName);
+
+    // Update active state on dropdown options
+    document.querySelectorAll('.theme-option').forEach(btn => {
+      btn.classList.toggle('active', btn.dataset.theme === themeName);
+    });
   }
 
   // ========== CONTENT LOADERS ==========
