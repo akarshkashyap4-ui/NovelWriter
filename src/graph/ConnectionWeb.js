@@ -303,12 +303,13 @@ export class ConnectionWeb {
                     name: hasPositions ? 'preset' : 'cose',
                     animate: !hasPositions,
                     animationDuration: 1000,
-                    nodeRepulsion: 50000,
-                    idealEdgeLength: 200,
-                    nodeOverlap: 50,
-                    gravity: 0.1,
+                    // Phase 16: Increased spacing for better readability
+                    nodeRepulsion: 200000,
+                    idealEdgeLength: 300,
+                    nodeOverlap: 80,
+                    gravity: 0.05,
                     randomize: false,
-                    padding: 80
+                    padding: 120
                 },
                 minZoom: 0.2,
                 maxZoom: 3
@@ -777,7 +778,12 @@ export class ConnectionWeb {
         try {
             // Build context from manuscript + world info
             const context = this.buildContext();
-            const prompt = this.buildPrompt(context);
+
+            // ========== PHASE 16: CHECK FOR PREVIOUS ANALYSIS ==========
+            const previousAnalysis = this.app.state.connectionWeb;
+            const isRegenerate = previousAnalysis && previousAnalysis._snapshot;
+
+            const prompt = this.buildPrompt(context, isRegenerate, previousAnalysis);
 
             let fullResponse = '';
             await this.app.aiService.sendMessageStream(
@@ -793,21 +799,46 @@ export class ConnectionWeb {
             // Parse response
             const graphData = this.parseResponse(fullResponse);
 
-            if (graphData) {
-                // Save to state
-                this.app.state.connectionWeb = {
-                    ...graphData,
-                    lastGenerated: new Date().toISOString()
-                };
-                this.app.save();
-
-                // Enable add buttons
-                document.getElementById('btn-add-node').disabled = false;
-                document.getElementById('btn-add-edge').disabled = false;
-
-                // Render
-                this.renderGraph();
+            // ========== PHASE 16: VALIDATE RESPONSE BEFORE SAVING ==========
+            // Only update snapshot if we got valid nodes (prevents empty responses from corrupting state)
+            if (!graphData || !graphData.nodes || graphData.nodes.length === 0) {
+                console.warn('Connection Web: Empty or invalid response, keeping previous state');
+                alert('Analysis returned no nodes. Previous graph preserved.');
+                this.isGenerating = false;
+                this.updateGenerateButton(false);
+                return;
             }
+
+            // Phase 16: Build cumulative comparativeLog
+            const existingLog = previousAnalysis?.comparativeLog || [];
+            const newLog = graphData.comparativeAnalysis
+                ? [...existingLog, { ...graphData.comparativeAnalysis, timestamp: new Date().toISOString() }]
+                : existingLog;
+
+            // Save to state with snapshot for future comparisons
+            this.app.state.connectionWeb = {
+                ...graphData,
+                lastGenerated: new Date().toISOString(),
+                comparativeLog: newLog,
+                // Phase 16: Store snapshot
+                _snapshot: {
+                    manuscriptText: context.manuscriptText,
+                    worldInfoText: context.worldInfoText,
+                    timestamp: new Date().toISOString()
+                }
+            };
+            this.app.save();
+
+            // Enable add buttons
+            document.getElementById('btn-add-node').disabled = false;
+            document.getElementById('btn-add-edge').disabled = false;
+
+            // Render
+            this.renderGraph();
+
+            // Phase 16: Render comparative analysis if present
+            // Phase 16: Render comparative analysis if present
+            this.renderComparativeSection();
 
         } catch (err) {
             console.error('Connection Web generation failed:', err);
@@ -871,11 +902,111 @@ export class ConnectionWeb {
         return { manuscriptText, worldInfoText };
     }
 
-    buildPrompt(context) {
-        return `Analyze the following manuscript and world information to extract a relationship graph.
+    buildPrompt(context, isRegenerate = false, previousAnalysis = null) {
+        // ========== PHASE 16: INCREMENTAL UPDATE PROMPT ==========
+        if (isRegenerate && previousAnalysis) {
+            const prevSnapshot = previousAnalysis._snapshot || {};
+            const prevNodes = previousAnalysis.nodes || [];
+            const prevEdges = previousAnalysis.edges || [];
+            const prevTimestamp = previousAnalysis.lastGenerated || 'unknown';
+
+            return `You are updating an EXISTING relationship graph. You are NOT creating a new one.
+
+==========================================================================
+## YOUR EXISTING GRAPH (THIS IS YOUR STARTING POINT)
+==========================================================================
+
+Generated at: ${prevTimestamp}
+
+Existing Nodes (${prevNodes.length}):
+\`\`\`json
+${JSON.stringify(prevNodes, null, 2)}
+\`\`\`
+
+Existing Edges (${prevEdges.length}):
+\`\`\`json
+${JSON.stringify(prevEdges, null, 2)}
+\`\`\`
+
+==========================================================================
+## HISTORY OF PREVIOUS UPDATES (Last 5)
+==========================================================================
+
+${(() => {
+                    const log = previousAnalysis.comparativeLog || [];
+                    if (log.length === 0) return 'This is the first update since initial analysis.';
+                    return log.slice(-5).map((entry, i) => `
+Update #${log.length - 4 + i} (${entry.timestamp || 'unknown'}):
+- Verdict: ${entry.overallVerdict || 'N/A'}
+- Nodes added: ${entry.nodesAdded?.length || 0}, removed: ${entry.nodesRemoved?.length || 0}
+- Edges added: ${entry.edgesAdded?.length || 0}, modified: ${entry.edgesModified?.length || 0}
+`).join('\n');
+                })()}
+
+==========================================================================
+## MANUSCRIPT AT THAT TIME
+==========================================================================
+
+${(prevSnapshot.manuscriptText || '').substring(0, 150000)}
+
+==========================================================================
+## CURRENT MANUSCRIPT (NOW)
+==========================================================================
+
+${context.manuscriptText.substring(0, 150000)}
+
+=== WORLD INFORMATION ===
+${context.worldInfoText}
+
+==========================================================================
+## YOUR TASK: UPDATE YOUR GRAPH
+==========================================================================
+
+**CRITICAL RULES:**
+
+1. **START WITH YOUR EXISTING GRAPH** - Copy ALL existing nodes and edges exactly as-is. Preserve their IDs!
+
+2. **COMPARE THE TWO MANUSCRIPTS** - Find what ACTUALLY changed.
+   - If manuscripts are IDENTICAL, return your EXACT previous graph unchanged.
+
+3. **ONLY ADD NEW ENTITIES** - You may only add new nodes/edges if new characters, locations, or relationships appear in new manuscript content.
+
+4. **ONLY MODIFY WITH EVIDENCE** - You may only modify an edge if the relationship itself changed in the story (e.g., allies became enemies).
+
+5. **PRESERVE STABILITY** - Existing nodes keep their EXACT IDs. No renaming IDs, no reorganizing.
+
+6. **NODE ID PRESERVATION IS CRITICAL** - If a character "John" had id "char_1", he must STILL be "char_1" in your updated graph.
+
+## OUTPUT FORMAT
+
+{
+  "nodes": [
+    // COPY all previous nodes exactly (same IDs!)
+    // ADD new nodes for new entities (with new unique IDs)
+  ],
+  "edges": [
+    // COPY all previous edges exactly
+    // ADD new edges for new relationships
+    // MODIFY edges only if the story changed the relationship
+  ],
+  "comparativeAnalysis": {
+    "manuscriptChanged": true/false,
+    "nodesAdded": [{"id": "...", "label": "...", "reason": "Introduced in [location]"}],
+    "nodesRemoved": [{"id": "...", "label": "...", "reason": "Character removed from story"}],
+    "edgesAdded": [{"source": "...", "target": "...", "reason": "New relationship in [location]"}],
+    "edgesModified": [{"source": "...", "target": "...", "change": "Allies → Enemies", "reason": "Betrayal in [chapter]"}],
+    "overallVerdict": "..."
+  }
+}
+
+**REMEMBER**: If manuscripts are identical, return {"manuscriptChanged": false} and your EXACT previous nodes and edges arrays unchanged.`;
+
+        } else {
+            // Fresh analysis prompt (first run)
+            return `Analyze the following manuscript and world information to extract a relationship graph.
 
 === MANUSCRIPT ===
-${context.manuscriptText.substring(0, 50000)}
+${context.manuscriptText.substring(0, 300000)}
 
 === WORLD INFORMATION ===
 ${context.worldInfoText}
@@ -908,6 +1039,7 @@ Extract ALL entities and their relationships from the text above. Return a JSON 
 7. Generate unique IDs (e.g., "char_1", "faction_1", "loc_1", etc.)
 
 Return ONLY the JSON object, no other text.`;
+        }
     }
 
     parseResponse(response) {
@@ -1260,5 +1392,84 @@ Return ONLY the JSON object, no other text.`;
         }
 
         this.clearSelection();
+    }
+
+    // ===== PHASE 16: COMPARATIVE ANALYSIS DISPLAY =====
+
+    renderComparativeSection() {
+        const data = this.app.state.connectionWeb;
+        if (!data || !data.comparativeAnalysis) return;
+
+        const current = data.comparativeAnalysis;
+
+        // Find or create comparative container
+        let container = document.getElementById('connection-web-comparative');
+        if (!container) {
+            container = document.createElement('div');
+            container.id = 'connection-web-comparative';
+            container.className = 'connection-web-comparative';
+            // Insert after canvas/before body ends
+            const body = document.querySelector('.connection-web-body');
+            if (body) body.appendChild(container);
+        }
+
+        let html = `
+            <div class="analysis-category-header" style="cursor: pointer;" title="Click to toggle">
+                <span class="analysis-category-icon">📊</span>
+                <span class="analysis-category-title" style="flex: 1">Comparative Analysis</span>
+                <span class="analysis-collapse-icon">▼</span>
+            </div>
+            <div class="analysis-category-body">
+        `;
+
+        if (current.manuscriptChanged === false) {
+            html += `<div class="comparative-verdict">✅ No manuscript changes detected. Graph unchanged.</div>`;
+        } else {
+            if (current.nodesAdded?.length) {
+                html += `<div class="comparative-item resolved">
+                    <strong>➕ Nodes Added (${current.nodesAdded.length}):</strong>
+                    <ul>${current.nodesAdded.map(n => `<li><b>${n.label}</b>: ${n.reason}</li>`).join('')}</ul>
+                </div>`;
+            }
+
+            if (current.nodesRemoved?.length) {
+                html += `<div class="comparative-item regressions">
+                    <strong>➖ Nodes Removed (${current.nodesRemoved.length}):</strong>
+                    <ul>${current.nodesRemoved.map(n => `<li><b>${n.label}</b>: ${n.reason}</li>`).join('')}</ul>
+                </div>`;
+            }
+
+            if (current.edgesAdded?.length) {
+                html += `<div class="comparative-item">
+                    <strong>🔗 Edges Added (${current.edgesAdded.length}):</strong>
+                    <ul>${current.edgesAdded.map(e => `<li>${e.source} → ${e.target}: ${e.reason}</li>`).join('')}</ul>
+                </div>`;
+            }
+
+            if (current.edgesModified?.length) {
+                html += `<div class="comparative-item">
+                    <strong>✏️ Edges Modified (${current.edgesModified.length}):</strong>
+                    <ul>${current.edgesModified.map(e => `<li>${e.source} → ${e.target}: ${e.change} (${e.reason})</li>`).join('')}</ul>
+                </div>`;
+            }
+
+            if (current.overallVerdict) {
+                html += `<div class="comparative-verdict"><strong>🎯 Verdict:</strong> ${current.overallVerdict}</div>`;
+            }
+        }
+
+        html += `</div>`;
+        container.innerHTML = html;
+
+        // Add collapse functionality
+        const header = container.querySelector('.analysis-category-header');
+        if (header) {
+            // Default to collapsed
+            container.classList.add('collapsed');
+
+            header.addEventListener('click', () => {
+                container.classList.toggle('collapsed');
+            });
+        }
     }
 }

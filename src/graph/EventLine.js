@@ -154,16 +154,60 @@ export class EventLine {
             return;
         }
 
-        // Always show delete/edit controls as requested by user for both modes
-        this.renderEventTimeline(events, true);
+        // Create a wrapper for vertical layout (Timeline top, Comparative Analysis bottom)
+        this.container.innerHTML = '';
 
-        // Phase 16: Render Comparative Analysis (if present)
+        const wrapper = document.createElement('div');
+        wrapper.style.display = 'flex';
+        wrapper.style.flexDirection = 'column';
+        wrapper.style.width = '100%';
+        wrapper.style.height = '100%';
+
+        // 1. Timeline Container (Scrollable)
+        const timelineContainer = document.createElement('div');
+        timelineContainer.className = 'event-line-scroll-area';
+        timelineContainer.style.flex = '1';
+        timelineContainer.style.overflowX = 'auto';
+        timelineContainer.style.overflowY = 'hidden';
+        timelineContainer.style.width = '100%';
+        timelineContainer.style.display = 'flex';
+        timelineContainer.style.alignItems = 'center';
+
+        // Render timeline into this temporary container
+        // We need to temporarily hack renderEventTimeline to target this specific container
+        // or simplisticly: render string and set innerHTML
+        timelineContainer.innerHTML = this.buildEventTimelineHTML(events, true);
+
+        wrapper.appendChild(timelineContainer);
+
+        // 2. Phase 16: Render Comparative Analysis (if present)
         const comparativeHtml = this.renderComparativeSection(this.app.state.eventLine);
         if (comparativeHtml) {
             const comparativeDiv = document.createElement('div');
             comparativeDiv.innerHTML = comparativeHtml;
-            this.container.appendChild(comparativeDiv);
+            comparativeDiv.style.flexShrink = '0';
+
+            // Add collapse functionality
+            const header = comparativeDiv.querySelector('.analysis-category-header');
+            const section = comparativeDiv.querySelector('.event-line-comparative');
+
+            if (header && section) {
+                header.style.cursor = 'pointer';
+                header.title = 'Click to toggle';
+                section.classList.add('collapsed'); // Default to collapsed
+
+                header.addEventListener('click', () => {
+                    section.classList.toggle('collapsed');
+                });
+            }
+
+            wrapper.appendChild(comparativeDiv);
         }
+
+        this.container.appendChild(wrapper);
+
+        // Re-bind events since we overwrote innerHTML
+        this.bindTimelineEvents(timelineContainer);
     }
 
     renderCustomMode() {
@@ -184,6 +228,12 @@ export class EventLine {
     }
 
     renderEventTimeline(events, showDelete = false) {
+        const html = this.buildEventTimelineHTML(events, showDelete);
+        this.container.innerHTML = html;
+        this.bindTimelineEvents(this.container);
+    }
+
+    buildEventTimelineHTML(events, showDelete = false) {
         let html = `<div class="event-line-track">`;
 
         events.forEach((event, index) => {
@@ -227,10 +277,12 @@ export class EventLine {
         });
 
         html += `</div>`;
-        this.container.innerHTML = html;
+        return html;
+    }
 
+    bindTimelineEvents(container) {
         // Add listeners for inserting events (click on segment)
-        this.container.querySelectorAll('.event-segment').forEach(segment => {
+        container.querySelectorAll('.event-segment').forEach(segment => {
             segment.style.cursor = 'cell'; // distinctive cursor
             segment.title = 'Click to insert event here';
 
@@ -246,7 +298,7 @@ export class EventLine {
         });
 
         // Add event listeners for editing (click on node)
-        this.container.querySelectorAll('.event-node').forEach(node => {
+        container.querySelectorAll('.event-node').forEach(node => {
             node.addEventListener('click', (e) => {
                 if (!e.target.closest('.event-delete-btn')) {
                     const index = parseInt(node.dataset.index);
@@ -260,16 +312,17 @@ export class EventLine {
         });
 
         // Add delete listeners
-        if (showDelete) {
-            this.container.querySelectorAll('.event-delete-btn').forEach(btn => {
-                btn.addEventListener('click', (e) => {
-                    e.stopPropagation();
-                    this.deleteEvent(parseInt(btn.dataset.index));
-                });
+        container.querySelectorAll('.event-delete-btn').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                this.deleteEvent(parseInt(btn.dataset.index));
             });
-        }
+        });
 
-        // Horizontal scroll handled in bindEvents()
+        // Horizontal scroll handled in bindEvents() for main container, 
+        // but if we are in a sub-container, we might need to handle it there too?
+        // Actually bindEvents handles wheel on this.container, which now contains a wrapper.
+        // The wrapper has a scrollable child. The wheel event might need adjustment if it doesn't propagate up or if target changed.
     }
 
     getTypeLabel(type) {
@@ -636,6 +689,14 @@ export class EventLine {
                 });
             }
 
+            // ========== PHASE 16: VALIDATE RESPONSE BEFORE SAVING ==========
+            // Only update snapshot if we got valid events (prevents empty responses from corrupting state)
+            if (!events || events.length === 0) {
+                console.warn('Event Line: Empty or invalid response, keeping previous state');
+                alert('Analysis returned no events. Previous event line preserved.');
+                return;
+            }
+
             // Save to state with snapshot for future comparisons
             this.app.state.eventLine = {
                 events,
@@ -703,8 +764,9 @@ export class EventLine {
         return context;
     }
 
-    buildPrompt(context) {
-        return `Analyze this manuscript and extract the KEY STORY EVENTS in chronological order.
+    buildPrompt(context, isRegenerate = false, previousAnalysis = null) {
+        // ========== PROMPT 1: FRESH ANALYSIS (First Run) ==========
+        let basePrompt = `Analyze this manuscript and extract the KEY STORY EVENTS in chronological order.
 
 For each event, provide:
 1. A SHORT TITLE (2-5 words, action-focused)
@@ -741,74 +803,88 @@ RULES:
 - Output ONLY the JSON array
 
 MANUSCRIPT:
-${context.substring(0, 50000)}`;
+${context.substring(0, 300000)}`;
 
-        // ========== PHASE 16: COMPARATIVE PROMPT (REGENERATE ONLY) ==========
+        // ========== PHASE 16: INCREMENTAL UPDATE PROMPT (REGENERATE ONLY) ==========
         if (isRegenerate && previousAnalysis) {
             const prevSnapshot = previousAnalysis._snapshot?.manuscriptText || '';
             const prevEvents = previousAnalysis.events || [];
             const comparativeLog = previousAnalysis.comparativeLog || [];
             const prevTimestamp = previousAnalysis.generatedAt || 'unknown';
 
-            basePrompt += `
+            // COMPLETELY REPLACE the base prompt - don't append!
+            basePrompt = `You are updating an EXISTING event timeline. You are NOT creating a new one.
 
 ==========================================================================
-## CRITICAL: THIS IS A REGENERATION - COMPARATIVE ANALYSIS REQUIRED
+## YOUR EXISTING EVENT LINE (THIS IS YOUR STARTING POINT)
 ==========================================================================
 
-**STOP. READ THIS CAREFULLY.**
-
-You have generated an event line for this manuscript BEFORE. The writer has made changes and wants you to:
-- PRESERVE existing events that still apply
-- EXPAND the timeline with new events from new content
-- MODIFY events if the underlying scenes changed
-- REMOVE events if the scenes were deleted
-
-If you regenerate blindly, you DESTROY consistency. 
-
-### YOUR PREVIOUS EVENT LINE
-(Generated at: ${prevTimestamp})
+The following timeline was created at ${prevTimestamp}. These events are ESTABLISHED. You own them.
 
 \`\`\`json
 ${JSON.stringify(prevEvents, null, 2)}
 \`\`\`
 
-### MANUSCRIPT AT PREVIOUS GENERATION TIME
-
-${prevSnapshot.substring(0, 40000)}
-
-${comparativeLog.length > 0 ? `
-### COMPARATIVE LOG (Previous Update Reasonings)
-${comparativeLog.map((entry, i) => `
---- Update ${i + 1} (${entry.timestamp}) ---
-${entry.reasoning}
-`).join('\n')}
-` : ''}
-
 ==========================================================================
-## YOUR TASK
+## HISTORY OF PREVIOUS UPDATES (Last 5)
 ==========================================================================
 
-1. **COMPARE** both manuscript versions
-2. **PRESERVE** events from the previous list that still apply
-3. **MODIFY** events if scenes changed (update description/type)
-4. **ADD NEW** events for new manuscript content
-5. **REMOVE** events if scenes were deleted
+${comparativeLog.length > 0 ? comparativeLog.slice(-5).map((log, i) => `
+Update #${comparativeLog.length - 4 + i} (${log.timestamp || 'unknown'}):
+- Verdict: ${log.overallVerdict || 'N/A'}
+- Changes: ${log.changesSummary || 'No changes recorded'}
+`).join('\n') : 'This is the first update since initial analysis.'}
+
+==========================================================================
+## MANUSCRIPT AT THAT TIME
+==========================================================================
+
+${prevSnapshot.substring(0, 300000)}
+
+==========================================================================
+## CURRENT MANUSCRIPT (NOW)
+==========================================================================
+
+${context.substring(0, 300000)}
+
+==========================================================================
+## YOUR TASK: UPDATE YOUR TIMELINE
+==========================================================================
+
+**CRITICAL RULES:**
+
+1. **START WITH YOUR EXISTING EVENTS** - Copy EVERY event from your previous timeline exactly as-is. Same titles, same descriptions, same types, same gaps. Do NOT rephrase or "improve" them.
+
+2. **COMPARE THE TWO MANUSCRIPTS** - Find what ACTUALLY changed. If nothing changed (manuscripts are IDENTICAL), return your EXACT previous event list unchanged.
+
+3. **ONLY ADD EVENTS FOR NEW CONTENT** - If the new manuscript has additional chapters/scenes that weren't there before, add events for those NEW parts only. Append them to the end.
+
+4. **ONLY MODIFY WITH EVIDENCE** - You may only change an existing event if you can point to a SPECIFIC text change in the manuscript that demands it:
+   - If a scene was completely rewritten, update that event's description
+   - If a scene was deleted, remove that event
+   - If a scene changed type (action became emotional), update the type
+   
+5. **PRESERVE STABILITY** - Events for unchanged manuscript sections MUST remain EXACTLY the same. No rephrasing, no "improvements", no reorganizing.
 
 ## OUTPUT FORMAT
 
-Return a JSON object with TWO parts:
 {
-  "events": [...the updated event array...],
+  "events": [
+    // COPY your previous events here EXACTLY (same titles, descriptions)
+    // Then APPEND new events for new content at the end
+    // Only MODIFY events where manuscript text actually changed
+  ],
   "comparativeAnalysis": {
-    "eventsAdded": [{"title": "New event", "reason": "Added in new Chapter X content"}],
-    "eventsModified": [{"title": "Modified event", "reason": "Scene was rewritten"}],
-    "eventsRemoved": [{"title": "Removed event", "reason": "Scene was deleted"}],
-    "overallVerdict": "Expanded timeline with X new events, modified Y, removed Z."
+    "manuscriptChanged": true/false,
+    "changesSummary": "Describe what changed in the manuscript, or 'No changes detected'",
+    "eventsAdded": [{"title": "New event title", "evidence": "New content in [Chapter X] shows..."}],
+    "eventsModified": [{"title": "Event title", "evidence": "Text in [Chapter Y] was changed from... to..."}],
+    "eventsRemoved": [{"title": "Removed event", "evidence": "Scene in [Chapter Z] was deleted"}],
+    "overallVerdict": "..."
   }
 }
 
-BE METICULOUS. The writer trusts you to maintain timeline consistency.`;
+**REMEMBER**: If manuscripts are identical, return {"manuscriptChanged": false} and return your EXACT previous events array unchanged. Do NOT rename or rephrase events just because you're regenerating. Stability is paramount.`;
         }
 
         return basePrompt;
@@ -879,7 +955,8 @@ BE METICULOUS. The writer trusts you to maintain timeline consistency.`;
             <div class="event-line-comparative comparative-analysis">
                 <div class="analysis-category-header">
                     <span class="analysis-category-icon">📈</span>
-                    <span class="analysis-category-title">Comparative Analysis</span>
+                    <span class="analysis-category-title" style="flex: 1">Comparative Analysis</span>
+                    <span class="analysis-collapse-icon">▼</span>
                 </div>
                 <div class="analysis-category-body">
         `;

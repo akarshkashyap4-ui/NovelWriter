@@ -109,10 +109,21 @@ export class StoryPulse {
             return;
         }
 
+        // ========== PHASE 16: CHECK FOR PREVIOUS ANALYSIS ==========
+        const previousAnalysis = this.app.state.analytics?.pulse;
+        const isRegenerate = previousAnalysis && previousAnalysis._snapshot;
+
         // Initialize pulse data structure
         const pulseData = {
             chapters: chapters,
-            metrics: {}
+            metrics: {},
+            // Phase 16: Store snapshot for future comparisons
+            _snapshot: {
+                manuscriptText: manuscriptText,
+                chapters: chapters,
+                timestamp: new Date().toISOString()
+            },
+            analyzedAt: new Date().toISOString()
         };
 
         try {
@@ -121,8 +132,23 @@ export class StoryPulse {
                 const metric = this.metrics[i];
                 this.btnRun.innerText = `Analyzing ${this.metricLabels[metric]} (${i + 1}/${this.metrics.length})...`;
 
-                const result = await this.analyzeMetric(metric, chapters, manuscriptText);
+                const result = await this.analyzeMetric(metric, chapters, manuscriptText, isRegenerate, previousAnalysis);
                 pulseData.metrics[metric] = result;
+            }
+
+            // ========== PHASE 16: VALIDATE RESPONSE BEFORE SAVING ==========
+            // Check if we have at least one valid metric (not just error fallbacks)
+            const validMetrics = Object.values(pulseData.metrics).filter(m =>
+                m.justification !== 'Analysis failed to parse. Default scores applied.'
+            );
+
+            if (validMetrics.length === 0) {
+                console.warn('Story Pulse: All metrics failed to parse, keeping previous state');
+                alert('Analysis failed to generate valid scores. Previous state preserved.');
+                this.isAnalyzing = false;
+                this.btnRun.disabled = false;
+                this.btnRun.innerText = 'Run Analysis';
+                return;
             }
 
             // Save results
@@ -143,9 +169,88 @@ export class StoryPulse {
         }
     }
 
-    async analyzeMetric(metric, chapters, manuscriptText) {
-        const prompt = `
-You are a critical literary analyst. Analyze the following manuscript and rate EACH CHAPTER on "${this.metricLabels[metric]}" from 1-10.
+    async analyzeMetric(metric, chapters, manuscriptText, isRegenerate = false, previousAnalysis = null) {
+        let prompt;
+
+        // ========== PHASE 16: INCREMENTAL UPDATE PROMPT ==========
+        if (isRegenerate && previousAnalysis) {
+            const prevSnapshot = previousAnalysis._snapshot?.manuscriptText || '';
+            const prevChapters = previousAnalysis._snapshot?.chapters || [];
+            const prevScores = previousAnalysis.metrics?.[metric]?.scores || [];
+            const prevJustification = previousAnalysis.metrics?.[metric]?.justification || '';
+            const prevTimestamp = previousAnalysis.analyzedAt || 'unknown';
+
+            prompt = `You are updating your EXISTING analysis for "${this.metricLabels[metric]}". You are NOT starting fresh.
+
+==========================================================================
+## YOUR PREVIOUS ANALYSIS FOR THIS METRIC
+==========================================================================
+
+Analysis conducted at: ${prevTimestamp}
+
+Previous chapters: ${prevChapters.map((c, i) => `${i + 1}. ${c}`).join('\n')}
+
+Previous scores for ${this.metricLabels[metric]}: ${JSON.stringify(prevScores)}
+
+Previous justification: "${prevJustification}"
+
+==========================================================================
+## ALL YOUR PREVIOUS METRIC ANALYSES (CONTEXT)
+==========================================================================
+
+${this.metrics.map(m => {
+                const mData = previousAnalysis.metrics?.[m];
+                if (!mData) return `${this.metricLabels[m]}: Not yet analyzed`;
+                return `${this.metricLabels[m]}: Scores ${JSON.stringify(mData.scores)} - "${mData.justification}"`;
+            }).join('\n\n')}
+
+==========================================================================
+## MANUSCRIPT AT THAT TIME
+==========================================================================
+
+${prevSnapshot.substring(0, 150000)}
+
+==========================================================================
+## CURRENT MANUSCRIPT (NOW)
+==========================================================================
+
+Current chapters: ${chapters.map((c, i) => `${i + 1}. ${c}`).join('\n')}
+
+${manuscriptText.substring(0, 150000)}
+
+==========================================================================
+## YOUR TASK: UPDATE YOUR SCORES
+==========================================================================
+
+**CRITICAL RULES:**
+
+1. **START WITH YOUR PREVIOUS SCORES** - Copy your previous scores array exactly as your starting point.
+
+2. **COMPARE THE TWO MANUSCRIPTS** - Find what ACTUALLY changed between them.
+   - If manuscripts are IDENTICAL, return your EXACT previous scores unchanged.
+   - If a specific chapter's content is unchanged, that chapter's score MUST remain the same.
+
+3. **ONLY UPDATE CHANGED CHAPTERS** - You may only change a chapter's score if:
+   - The chapter content was significantly rewritten
+   - A new chapter was added (give it a fresh score)
+   - A chapter was removed (remove that score)
+
+4. **PRESERVE STABILITY** - Unchanged chapters = unchanged scores. No random adjustments.
+
+## OUTPUT FORMAT
+
+{
+  "scores": [...array of ${chapters.length} numbers, one per chapter...],
+  "justification": "Explain what changed (if anything) and why scores were updated or kept the same.",
+  "manuscriptChanged": true/false,
+  "changedChapters": [list of chapter numbers that had score changes, or empty if no changes]
+}
+
+**REMEMBER**: If manuscripts are identical, return {"manuscriptChanged": false} and your EXACT previous scores array.`;
+
+        } else {
+            // Fresh analysis prompt (first run)
+            prompt = `You are a critical literary analyst. Analyze the following manuscript and rate EACH CHAPTER on "${this.metricLabels[metric]}" from 1-10.
 
 Be COMPARATIVE - your scores should reflect how chapters compare to EACH OTHER within this story. High variance is good (don't just give everything 6-8).
 
@@ -154,15 +259,15 @@ ${chapters.map((c, i) => `${i + 1}. ${c}`).join('\n')}
 
 Respond with ONLY valid JSON in this exact format:
 {
-    "scores": [7, 5, 8, 6, ...],
-    "justification": "A 2-3 sentence explanation of what drove your ratings and which chapters stood out."
+  "scores": [7, 5, 8, 6, ...],
+  "justification": "A 2-3 sentence explanation of what drove your ratings and which chapters stood out."
 }
 
 The "scores" array must have exactly ${chapters.length} numbers (one per chapter in order).
 
 === MANUSCRIPT ===
-${manuscriptText}
-`;
+${manuscriptText.substring(0, 300000)}`;
+        }
 
         const response = await this.app.aiService.sendMessage(
             [{ role: 'user', content: prompt }],
@@ -184,7 +289,9 @@ ${manuscriptText}
 
             return {
                 scores: parsed.scores.map(s => Math.max(1, Math.min(10, parseInt(s) || 5))),
-                justification: parsed.justification || 'No justification provided.'
+                justification: parsed.justification || 'No justification provided.',
+                manuscriptChanged: parsed.manuscriptChanged,
+                changedChapters: parsed.changedChapters || []
             };
         } catch (e) {
             console.error('Failed to parse metric score', metric, response);

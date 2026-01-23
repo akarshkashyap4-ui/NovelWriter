@@ -641,6 +641,18 @@ export class PlotTracker {
 
             const analysis = this.parseResponse(response);
 
+            // ========== PHASE 16: VALIDATE RESPONSE BEFORE SAVING ==========
+            // Only update snapshot if we got valid data (prevents empty responses from corrupting state)
+            const hasValidData = (analysis.openPlots?.length > 0) ||
+                (analysis.concludedPlots?.length > 0) ||
+                (analysis.plotHoles?.length > 0);
+
+            if (!hasValidData && !analysis.comparativeAnalysis?.manuscriptChanged === false) {
+                console.warn('Plot Tracker: Empty or invalid response, keeping previous state');
+                alert('Analysis returned empty results. Previous analysis preserved.');
+                return;
+            }
+
             // ========== PHASE 16: BUILD COMPARATIVE LOG ==========
             let comparativeLog = [];
             if (isRegenerate && previousAnalysis?.comparativeLog) {
@@ -661,6 +673,7 @@ export class PlotTracker {
             }
 
             // Save to state with snapshot for future comparisons
+            // (Only reached if validation passed)
             this.app.state.plotTracker = {
                 ...analysis,
                 scannedAt: new Date().toISOString(),
@@ -726,6 +739,7 @@ export class PlotTracker {
     }
 
     buildPrompt(context, isRegenerate = false, previousAnalysis = null) {
+        // ========== PROMPT 1: FRESH ANALYSIS (First Run) ==========
         let basePrompt = `You are a professional story editor. Perform a DEEP and THOROUGH analysis of this manuscript.
 
 Read the ENTIRE manuscript carefully and identify:
@@ -780,7 +794,7 @@ Output ONLY valid JSON.
 MANUSCRIPT:
 ${context.substring(0, 80000)}`;
 
-        // ========== PHASE 16: COMPARATIVE PROMPT (RESCAN ONLY) ==========
+        // ========== PHASE 16: INCREMENTAL UPDATE PROMPT (RESCAN ONLY) ==========
         if (isRegenerate && previousAnalysis) {
             const prevSnapshot = previousAnalysis._snapshot?.manuscriptText || '';
             const prevResults = {
@@ -791,87 +805,89 @@ ${context.substring(0, 80000)}`;
             const comparativeLog = previousAnalysis.comparativeLog || [];
             const prevTimestamp = previousAnalysis.scannedAt || 'unknown';
 
-            basePrompt += `
+            // COMPLETELY REPLACE the base prompt for rescans - don't append, replace!
+            basePrompt = `You are updating an EXISTING plot analysis. You are NOT creating a new one.
 
 ==========================================================================
-## CRITICAL: THIS IS A RESCAN - COMPARATIVE ANALYSIS REQUIRED
+## YOUR EXISTING ANALYSIS (THIS IS YOUR STARTING POINT)
 ==========================================================================
 
-**STOP. READ THIS CAREFULLY.**
-
-You have analyzed this manuscript BEFORE. The writer has made changes since your last scan and wants to understand:
-- Which OPEN PLOTS are now CONCLUDED? (Move them to concludedPlots)
-- Which PLOT HOLES are now FIXED? (Remove them or lower severity)
-- What NEW plot threads appeared?
-- What NEW plot holes emerged?
-
-If you ignore the previous analysis and regenerate blindly, you DESTROY the writer's ability to track their progress.
-
-### YOUR PREVIOUS ANALYSIS
-(Conducted at: ${prevTimestamp})
+The following analysis was created at ${prevTimestamp}. This IS your analysis. You own it.
 
 \`\`\`json
 ${JSON.stringify(prevResults, null, 2)}
 \`\`\`
 
-### MANUSCRIPT AT PREVIOUS SCAN TIME
-
-${prevSnapshot.substring(0, 60000)}
-
-${comparativeLog.length > 0 ? `
-### COMPARATIVE LOG (Previous Update Reasonings)
-${comparativeLog.map((entry, i) => `
---- Update ${i + 1} (${entry.timestamp}) ---
-${entry.reasoning}
-`).join('\n')}
-` : ''}
-
 ==========================================================================
-## YOUR TASK: METICULOUS COMPARISON
+## HISTORY OF PREVIOUS UPDATES (Last 5)
 ==========================================================================
 
-1. **COMPARE** both manuscript versions (previous vs current)
-2. **FOR EACH PREVIOUS OPEN PLOT** determine:
-   - STILL OPEN: Keep in openPlots as-is
-   - NOW CONCLUDED: Move to concludedPlots with resolution details
-   - SCRAPPED: If the setup was removed, do not include
-3. **FOR EACH PREVIOUS PLOT HOLE** determine:
-   - STILL EXISTS: Keep with same or adjusted severity
-   - FIXED: Do not include in new list
-   - WORSE: Increase severity
-4. **IDENTIFY NEW** items that weren't in previous analysis
-5. **PRESERVE** your reasoning
+${comparativeLog.length > 0 ? comparativeLog.slice(-5).map((log, i) => `
+Update #${comparativeLog.length - 4 + i} (${log.timestamp || 'unknown'}):
+- Verdict: ${log.overallVerdict || 'N/A'}
+- Changes: ${log.changesSummary || 'No changes recorded'}
+`).join('\n') : 'This is the first update since initial analysis.'}
 
-## OUTPUT REQUIREMENTS
+==========================================================================
+## MANUSCRIPT AT THAT TIME
+==========================================================================
 
-Your JSON response MUST include an additional "comparativeAnalysis" section:
+${prevSnapshot.substring(0, 300000)}
+
+==========================================================================
+## CURRENT MANUSCRIPT (NOW)
+==========================================================================
+
+${context.substring(0, 300000)}
+
+==========================================================================
+## YOUR TASK: UPDATE YOUR ANALYSIS
+==========================================================================
+
+**CRITICAL RULES:**
+
+1. **START WITH YOUR EXISTING ANALYSIS** - Copy every single item from your previous analysis as your starting point. Do NOT start fresh.
+
+2. **COMPARE THE TWO MANUSCRIPTS** - Find what ACTUALLY changed between them. If nothing changed, the manuscripts are IDENTICAL and you MUST return your EXACT previous analysis unchanged.
+
+3. **ONLY MODIFY WITH EVIDENCE** - You may only change an item if you can point to a SPECIFIC difference between the old and new manuscript that justifies it:
+   - Move "Open Plot" → "Concluded" ONLY if new manuscript shows resolution
+   - Remove "Plot Hole" ONLY if new manuscript fixes it
+   - Add new item ONLY if new manuscript introduces it
+   
+4. **PRESERVE STABILITY** - If a plot point or plot hole existed before and the relevant manuscript sections are unchanged, it MUST remain in your updated analysis with the SAME details.
+
+5. **NO RANDOM CHANGES** - Do NOT rephrase titles, do NOT adjust severities, do NOT reorganize - unless the manuscript change demands it.
+
+## OUTPUT FORMAT
 
 {
-  "openPlots": [...],
-  "concludedPlots": [...],
-  "plotHoles": [...],
-  
+  "openPlots": [
+    // Start by copying ALL previous openPlots
+    // Remove only those that are now concluded (cite evidence)
+    // Add only genuinely new ones (cite where introduced)
+  ],
+  "concludedPlots": [
+    // Start by copying ALL previous concludedPlots  
+    // Add any that moved from openPlots (cite resolution scene)
+  ],
+  "plotHoles": [
+    // Start by copying ALL previous plotHoles with SAME severity
+    // Remove only those actually fixed (cite the fix)
+    // Add only new ones found (cite the problem location)
+  ],
   "comparativeAnalysis": {
-    "movedToConcluded": [
-      {"title": "Plot that was open, now concluded", "reason": "Writer added resolution in Chapter X"}
-    ],
-    "resolvedHoles": [
-      {"issue": "Previous plot hole title", "reason": "Fixed by adding explanation in Chapter Y"}
-    ],
-    "severityChanges": [
-      {"issue": "Plot hole title", "previous": 7, "current": 4, "reason": "Partially addressed"}
-    ],
-    "newOpenPlots": [
-      {"title": "New plot thread", "reason": "Introduced in new content"}
-    ],
-    "newPlotHoles": [
-      {"issue": "New issue", "reason": "Created by recent changes"}
-    ],
-    "overallVerdict": "The writer has resolved X open plots and fixed Y plot holes. Z new issues emerged. Net progress: POSITIVE/NEGATIVE/NEUTRAL"
+    "manuscriptChanged": true/false,
+    "changesSummary": "Brief description of what changed in the manuscript, or 'No changes detected'",
+    "movedToConcluded": [{"title": "...", "evidence": "In [Chapter X > Scene Y], the text now shows..."}],
+    "resolvedHoles": [{"issue": "...", "evidence": "Fixed because in [location], the manuscript now..."}],
+    "newOpenPlots": [{"title": "...", "evidence": "Introduced in [location] where..."}],
+    "newPlotHoles": [{"issue": "...", "evidence": "Found in [location] where..."}],
+    "overallVerdict": "..."
   }
 }
 
-BE THOROUGH. BE SPECIFIC. The writer trusts you to track their progress.`;
+**REMEMBER**: If the manuscripts are identical, return {"manuscriptChanged": false} in comparativeAnalysis and return your EXACT previous lists unchanged. Stability is paramount.`;
         }
 
         return basePrompt;
