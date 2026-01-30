@@ -52,5 +52,5 @@ git clone https://github.com/akarshkashyap4-ui/NovelWriter.git
 cd NovelWriter
 npm install
 npm run dev
-
-See **docs/guide.md** for a full walkthrough of setup and features.
+```
+IMPORTANT: See **docs/guide.md** for a full walkthrough of setup and features.
