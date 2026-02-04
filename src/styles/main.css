@@ -51,7 +51,8 @@
 
   /* Sizing */
   --sidebar-width: 280px;
-  --sidebar-right-width: 300px;
+  --sidebar-right-width: 350px;
+  --agent-panel-width: 350px;
   /* Slightly wider for modern feel */
   --topbar-height: 54px;
   /* Taller header */
@@ -754,13 +755,41 @@ body.focus-mode #btn-focus-mode {
   top: 48px;
   /* Below header */
   bottom: 0;
-  width: 350px;
+  width: var(--agent-panel-width);
+  /* Constraints handled by JS resizing */
   display: flex;
   flex-direction: column;
   background: var(--bg-sidebar);
   border-left: 1px solid var(--border-color);
-  transition: transform 0.3s ease;
+  transition: transform 0.3s ease, width 0s;
+  /* No transition on width */
   z-index: 50;
+  overflow-x: hidden;
+  box-sizing: border-box;
+}
+
+/* Disable transitions while resizing to prevent lag */
+body.resizing-active .agent-panel,
+body.resizing-active .agent-drawer-tab {
+  transition: none !important;
+}
+
+/* Resize handle on left edge */
+.agent-resize-handle {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 6px;
+  cursor: ew-resize;
+  background: transparent;
+  z-index: 10;
+  transition: background 0.2s ease;
+}
+
+.agent-resize-handle:hover,
+.agent-resize-handle.resizing {
+  background: var(--accent-primary);
 }
 
 .agent-panel.collapsed {
@@ -774,7 +803,7 @@ body.focus-mode #btn-focus-mode {
 
 .agent-drawer-tab {
   position: fixed;
-  right: 350px;
+  right: var(--agent-panel-width);
   /* Panel width - attached to left edge of panel */
   top: 50%;
   transform: translateY(-50%);

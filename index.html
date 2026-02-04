@@ -270,6 +270,7 @@
 
       <!-- Right Sidebar - AI Agent Panel -->
       <aside class="agent-panel collapsed" id="agent-panel">
+        <div class="agent-resize-handle" id="agent-resize-handle"></div>
         <div class="agent-content">
           <div class="agent-header">
             <div class="agent-title">
@@ -851,21 +852,34 @@
       </div>
       <div class="modal-body pulse-modal-body">
         <div class="pulse-controls">
-          <label><input type="checkbox" class="metric-checkbox" value="pacing" checked> <span style="color: #FF5733">Pacing</span></label>
-          <label><input type="checkbox" class="prev-checkbox" data-metric="pacing" title="Show previous analysis"> <span class="prev-label">Prev</span></label>
+          <label><input type="checkbox" class="metric-checkbox" value="pacing" checked> <span
+              style="color: #FF5733">Pacing</span></label>
+          <label><input type="checkbox" class="prev-checkbox" data-metric="pacing" title="Show previous analysis"> <span
+              class="prev-label">Prev</span></label>
           <label><input type="checkbox" class="metric-checkbox" value="engagement" checked> <span
               style="color: #28B463">Engagement</span></label>
-          <label><input type="checkbox" class="prev-checkbox" data-metric="engagement" title="Show previous analysis"> <span class="prev-label">Prev</span></label>
-          <label><input type="checkbox" class="metric-checkbox" value="enjoyability"> <span style="color: #F1C40F">Enjoyability</span></label>
-          <label><input type="checkbox" class="prev-checkbox" data-metric="enjoyability" title="Show previous analysis"> <span class="prev-label">Prev</span></label>
-          <label><input type="checkbox" class="metric-checkbox" value="emotional"> <span style="color: #8E44AD">Emotional</span></label>
-          <label><input type="checkbox" class="prev-checkbox" data-metric="emotional" title="Show previous analysis"> <span class="prev-label">Prev</span></label>
-          <label><input type="checkbox" class="metric-checkbox" value="tension" checked> <span style="color: #C0392B">Tension</span></label>
-          <label><input type="checkbox" class="prev-checkbox" data-metric="tension" title="Show previous analysis"> <span class="prev-label">Prev</span></label>
-          <label><input type="checkbox" class="metric-checkbox" value="atmosphere"> <span style="color: #2980B9">Atmosphere</span></label>
-          <label><input type="checkbox" class="prev-checkbox" data-metric="atmosphere" title="Show previous analysis"> <span class="prev-label">Prev</span></label>
-          <label><input type="checkbox" class="metric-checkbox" value="depth"> <span style="color: #797D7F">Depth</span></label>
-          <label><input type="checkbox" class="prev-checkbox" data-metric="depth" title="Show previous analysis"> <span class="prev-label">Prev</span></label>
+          <label><input type="checkbox" class="prev-checkbox" data-metric="engagement" title="Show previous analysis">
+            <span class="prev-label">Prev</span></label>
+          <label><input type="checkbox" class="metric-checkbox" value="enjoyability"> <span
+              style="color: #F1C40F">Enjoyability</span></label>
+          <label><input type="checkbox" class="prev-checkbox" data-metric="enjoyability" title="Show previous analysis">
+            <span class="prev-label">Prev</span></label>
+          <label><input type="checkbox" class="metric-checkbox" value="emotional"> <span
+              style="color: #8E44AD">Emotional</span></label>
+          <label><input type="checkbox" class="prev-checkbox" data-metric="emotional" title="Show previous analysis">
+            <span class="prev-label">Prev</span></label>
+          <label><input type="checkbox" class="metric-checkbox" value="tension" checked> <span
+              style="color: #C0392B">Tension</span></label>
+          <label><input type="checkbox" class="prev-checkbox" data-metric="tension" title="Show previous analysis">
+            <span class="prev-label">Prev</span></label>
+          <label><input type="checkbox" class="metric-checkbox" value="atmosphere"> <span
+              style="color: #2980B9">Atmosphere</span></label>
+          <label><input type="checkbox" class="prev-checkbox" data-metric="atmosphere" title="Show previous analysis">
+            <span class="prev-label">Prev</span></label>
+          <label><input type="checkbox" class="metric-checkbox" value="depth"> <span
+              style="color: #797D7F">Depth</span></label>
+          <label><input type="checkbox" class="prev-checkbox" data-metric="depth" title="Show previous analysis"> <span
+              class="prev-label">Prev</span></label>
         </div>
 
         <div class="pulse-graph-container" id="pulse-graph-container">
@@ -1038,8 +1052,8 @@
     // crypto.randomUUID requires Secure Context (HTTPS/localhost)
     // This polyfill enables LAN access over plain HTTP
     if (typeof crypto !== 'undefined' && typeof crypto.randomUUID !== 'function') {
-      crypto.randomUUID = function() {
-        return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+      crypto.randomUUID = function () {
+        return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function (c) {
           var r = Math.random() * 16 | 0;
           var v = c === 'x' ? r : (r & 0x3 | 0x8);
           return v.toString(16);

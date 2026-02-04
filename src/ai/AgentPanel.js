@@ -22,6 +22,7 @@ export class AgentPanel {
 
         this.panel = document.getElementById('agent-panel');
         this.drawerTab = document.getElementById('agent-drawer-tab');
+        this.resizeHandle = document.getElementById('agent-resize-handle');
         this.modeSelect = document.getElementById('agent-mode-select');
         this.historyContainer = document.getElementById('agent-history');
         this.inputField = document.getElementById('agent-input');
@@ -32,6 +33,7 @@ export class AgentPanel {
         this.deleteConversationBtn = document.getElementById('agent-delete-conversation');
 
         this.bindEvents();
+        this.bindResizeEvents();
         this.loadActiveConversation();
     }
 
@@ -82,6 +84,80 @@ export class AgentPanel {
                     this.loadConversation(convId);
                 }
             });
+        }
+    }
+
+    bindResizeEvents() {
+        if (!this.resizeHandle || !this.panel) return;
+
+        let isResizing = false;
+        let startX = 0;
+        let startWidth = 0;
+
+        const onMouseMove = (e) => {
+            if (!isResizing) return;
+
+            // Calculate width based on mouse position from right edge of viewport
+            const viewportWidth = window.innerWidth;
+            const mouseFromRight = viewportWidth - e.clientX;
+
+            // Strict clamp (Min 350px - only allow expansion)
+            const maxAllowedWidth = Math.min(600, viewportWidth - 50);
+            const newWidth = Math.min(maxAllowedWidth, Math.max(350, mouseFromRight));
+
+            // Apply width via CSS variable
+            document.documentElement.style.setProperty('--agent-panel-width', `${newWidth}px`);
+        };
+
+        const onMouseUp = () => {
+            if (!isResizing) return;
+            isResizing = false;
+
+            this.resizeHandle.classList.remove('resizing');
+            document.body.classList.remove('resizing-active'); // Re-enable transitions
+
+            document.body.style.cursor = '';
+            document.body.style.userSelect = '';
+
+            // Save width preference
+            const currentWidth = getComputedStyle(document.documentElement).getPropertyValue('--agent-panel-width').trim();
+            localStorage.setItem('novelwriter-agent-panel-width', currentWidth);
+
+            document.removeEventListener('mousemove', onMouseMove);
+            document.removeEventListener('mouseup', onMouseUp);
+        };
+
+        this.resizeHandle.addEventListener('mousedown', (e) => {
+            if (!this.isExpanded) return;
+            e.preventDefault();
+            isResizing = true;
+            startX = e.clientX;
+
+            this.resizeHandle.classList.add('resizing');
+            document.body.classList.add('resizing-active'); // Disable transitions
+
+            document.body.style.cursor = 'ew-resize';
+            document.body.style.userSelect = 'none';
+
+            document.addEventListener('mousemove', onMouseMove);
+            document.addEventListener('mouseup', onMouseUp);
+        });
+
+        // Cleanup legacy inline styles from previous versions
+        if (this.panel) {
+            this.panel.style.width = '';
+            this.panel.style.right = '';
+            this.panel.style.left = '';
+            this.panel.style.transform = '';
+        }
+        if (this.drawerTab) {
+            this.drawerTab.style.right = '';
+        }
+
+        // Restore saved width
+        const savedWidth = localStorage.getItem('novelwriter-agent-panel-width');
+        if (savedWidth) {
+            document.documentElement.style.setProperty('--agent-panel-width', savedWidth);
         }
     }
 
@@ -211,7 +287,8 @@ export class AgentPanel {
             const modeNames = {
                 quick: '⚡ Quick Mode',
                 planning: '📋 Planning Mode',
-                chatty: '💬 Chatty Mode'
+                chatty: '💬 Chatty Mode',
+                brainstorm: '💡 Brainstorm Mode'
             };
             this.addMessage('mode', `Using ${modeNames[selectedMode]}`);
         }
@@ -295,7 +372,8 @@ export class AgentPanel {
                             const modeNames = {
                                 quick: '⚡ Quick Mode',
                                 planning: '📋 Planning Mode',
-                                chatty: '💬 Chatty Mode'
+                                chatty: '💬 Chatty Mode',
+                                brainstorm: '💡 Brainstorm Mode'
                             };
                             this.updateModeAnnouncement(`AI selected ${modeNames[aiDeclaredMode]}`);
                         }
