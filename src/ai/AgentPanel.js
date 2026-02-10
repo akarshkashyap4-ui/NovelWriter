@@ -7,13 +7,13 @@
  */
 
 import { ContextManager } from './ContextManager.js';
-import { DiffPreview } from '../components/DiffPreview.js';
+
 
 export class AgentPanel {
     constructor(app) {
         this.app = app;
         this.contextManager = new ContextManager(app);
-        this.diffPreview = new DiffPreview(app);
+
         this.history = []; // Current conversation messages (for AI context)
         this.currentMode = 'auto'; // auto, quick, planning, chatty
         this.isProcessing = false;
@@ -766,23 +766,7 @@ Please provide your suggestion. Keep it natural and fitting to the story.`;
                 const retryBtn = messageEl.querySelector('.message-retry-btn');
                 retryBtn.addEventListener('click', () => this.retryLastMessage());
 
-                // Detect and add Apply button for edits
-                const edits = this.detectEditableContent(content);
-                if (edits.hasEdits) {
-                    const applyBtn = document.createElement('button');
-                    applyBtn.className = 'message-apply-btn';
-                    applyBtn.title = 'Preview and Apply Changes';
-                    applyBtn.innerHTML = `
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <polyline points="20 6 9 17 4 12"></polyline>
-                        </svg>
-                        Apply Changes
-                    `;
-                    applyBtn.addEventListener('click', () => this.applyEdit(edits));
 
-                    const contentEl = messageEl.querySelector('.message-content');
-                    contentEl.after(applyBtn);
-                }
             } else {
                 messageEl.innerHTML = `<div class="message-content">${this.formatContent(content)}</div>`;
             }
@@ -830,23 +814,7 @@ Please provide your suggestion. Keep it natural and fitting to the story.`;
                 const retryBtn = messageEl.querySelector('.message-retry-btn');
                 retryBtn.addEventListener('click', () => this.retryLastMessage());
 
-                // Detect and add Apply button for edits
-                const edits = this.detectEditableContent(content);
-                if (edits.hasEdits) {
-                    const applyBtn = document.createElement('button');
-                    applyBtn.className = 'message-apply-btn';
-                    applyBtn.title = 'Preview and Apply Changes';
-                    applyBtn.innerHTML = `
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <polyline points="20 6 9 17 4 12"></polyline>
-                        </svg>
-                        Apply Changes
-                    `;
-                    applyBtn.addEventListener('click', () => this.applyEdit(edits));
 
-                    const contentEl = messageEl.querySelector('.message-content');
-                    contentEl.after(applyBtn);
-                }
             } else {
                 const contentEl = messageEl.querySelector('.message-content');
                 if (contentEl) {
@@ -858,44 +826,7 @@ Please provide your suggestion. Keep it natural and fitting to the story.`;
         }
     }
 
-    /**
-     * Detect if content has actionable edits (diffs)
-     */
-    detectEditableContent(content) {
-        // Look for markdown code blocks
-        const diffRegex = /```(?:diff|text|markdown)?\s*\n([\s\S]*?)```/g;
-        let match;
-        const blocks = [];
-        let isDiff = false;
 
-        while ((match = diffRegex.exec(content)) !== null) {
-            const blockContent = match[1];
-            blocks.push(blockContent);
-            // Check if it looks like a diff
-            if (blockContent.match(/^[-+@]/m)) {
-                isDiff = true;
-            }
-        }
-
-        return {
-            hasEdits: blocks.length > 0,
-            diffs: blocks,
-            isDiff: isDiff
-        };
-    }
-
-    /**
-     * Open diff preview for edits
-     */
-    applyEdit(edits) {
-        if (!edits.diffs || edits.diffs.length === 0) return;
-
-        const combinedContent = edits.diffs.join('\n\n');
-
-        this.diffPreview.show(combinedContent, {
-            type: edits.isDiff ? 'diff' : 'replacement'
-        });
-    }
 
     /**
      * Update the most recent mode announcement
@@ -1045,34 +976,13 @@ Please provide your suggestion. Keep it natural and fitting to the story.`;
             .replace(/</g, '&lt;')
             .replace(/>/g, '&gt;');
 
-        // Handle diff code blocks specially - apply styling ONLY inside ```diff blocks
-        formatted = formatted.replace(/```diff\n([\s\S]*?)```/g, (match, diffContent) => {
-            const styledDiff = diffContent
-                .split('\n')
-                .map(line => {
-                    if (line.startsWith('- ')) {
-                        return `<span class="diff-remove">${line}</span>`;
-                    } else if (line.startsWith('+ ')) {
-                        return `<span class="diff-add">${line}</span>`;
-                    }
-                    return line;
-                })
-                .join('\n');
-            return `<pre><code class="diff">${styledDiff}</code></pre>`;
-        });
-
         // Basic markdown
         formatted = formatted
-            // Other code blocks
-            .replace(/```(\w*)\n([\s\S]*?)```/g, '<pre><code>$2</code></pre>')
-            // Inline code
-            .replace(/`([^`]+)`/g, '<code>$1</code>')
-            // Bold
-            .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
-            // Italic
-            .replace(/\*([^*]+)\*/g, '<em>$1</em>')
-            // Line breaks
-            .replace(/\n/g, '<br>');
+            .replace(/```(\w*)\n([\s\S]*?)```/g, '<pre><code>$2</code></pre>') // Code blocks
+            .replace(/`([^`]+)`/g, '<code>$1</code>') // Inline code
+            .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>') // Bold
+            .replace(/\*([^*]+)\*/g, '<em>$1</em>') // Italic
+            .replace(/\n/g, '<br>'); // Line breaks
 
         return formatted;
     }
